@@ -1,0 +1,783 @@
+{
+  "schema_version": 1,
+  "art_direction_brief": "README.md#environment-assets",
+  "assets": [
+    {
+      "id": "tree_default",
+      "role": "tree",
+      "path": "public/assets/env/nature.glb#tree_default",
+      "source_file": "assets-src/kenney-nature-kit/tree_default.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "tree_oak",
+      "role": "tree",
+      "path": "public/assets/env/nature.glb#tree_oak",
+      "source_file": "assets-src/kenney-nature-kit/tree_oak.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "tree_fat",
+      "role": "tree",
+      "path": "public/assets/env/nature.glb#tree_fat",
+      "source_file": "assets-src/kenney-nature-kit/tree_fat.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "tree_detailed",
+      "role": "tree",
+      "path": "public/assets/env/nature.glb#tree_detailed",
+      "source_file": "assets-src/kenney-nature-kit/tree_detailed.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "tree_tall",
+      "role": "tree",
+      "path": "public/assets/env/nature.glb#tree_tall",
+      "source_file": "assets-src/kenney-nature-kit/tree_tall.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "tree_pineRoundA",
+      "role": "tree",
+      "path": "public/assets/env/nature.glb#tree_pineRoundA",
+      "source_file": "assets-src/kenney-nature-kit/tree_pineRoundA.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "plant_bushLarge",
+      "role": "bush",
+      "path": "public/assets/env/nature.glb#plant_bushLarge",
+      "source_file": "assets-src/kenney-nature-kit/plant_bushLarge.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "plant_bushDetailed",
+      "role": "bush",
+      "path": "public/assets/env/nature.glb#plant_bushDetailed",
+      "source_file": "assets-src/kenney-nature-kit/plant_bushDetailed.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "plant_bush",
+      "role": "bush",
+      "path": "public/assets/env/nature.glb#plant_bush",
+      "source_file": "assets-src/kenney-nature-kit/plant_bush.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "grass",
+      "role": "grass tuft",
+      "path": "public/assets/env/nature.glb#grass",
+      "source_file": "assets-src/kenney-nature-kit/grass.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "grass_large",
+      "role": "grass tuft",
+      "path": "public/assets/env/nature.glb#grass_large",
+      "source_file": "assets-src/kenney-nature-kit/grass_large.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "grass_leafs",
+      "role": "grass tuft",
+      "path": "public/assets/env/nature.glb#grass_leafs",
+      "source_file": "assets-src/kenney-nature-kit/grass_leafs.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "flower_yellowA",
+      "role": "flower",
+      "path": "public/assets/env/nature.glb#flower_yellowA",
+      "source_file": "assets-src/kenney-nature-kit/flower_yellowA.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "flower_redA",
+      "role": "flower",
+      "path": "public/assets/env/nature.glb#flower_redA",
+      "source_file": "assets-src/kenney-nature-kit/flower_redA.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "flower_purpleA",
+      "role": "flower",
+      "path": "public/assets/env/nature.glb#flower_purpleA",
+      "source_file": "assets-src/kenney-nature-kit/flower_purpleA.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "rock_smallA",
+      "role": "rock",
+      "path": "public/assets/env/nature.glb#rock_smallA",
+      "source_file": "assets-src/kenney-nature-kit/rock_smallA.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "rock_smallC",
+      "role": "rock",
+      "path": "public/assets/env/nature.glb#rock_smallC",
+      "source_file": "assets-src/kenney-nature-kit/rock_smallC.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/nature-kit",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-nature-kit/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.1",
+        "edits": [
+          "Removed KHR_materials_unlit so models are lit/shadowed by the scene",
+          "roughness 0.85, metalness 0",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "road-straight",
+      "role": "road tile",
+      "path": "public/assets/env/roads.glb#road-straight",
+      "source_file": "assets-src/kenney-city-kit-roads/road-straight.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/city-kit-roads",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-city-kit-roads/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.2",
+        "edits": [
+          "Shared colormap texture lightened towards lavender (k=0.55) to match the yard palette",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "road-driveway-double",
+      "role": "road tile",
+      "path": "public/assets/env/roads.glb#road-driveway-double",
+      "source_file": "assets-src/kenney-city-kit-roads/road-driveway-double.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/city-kit-roads",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-city-kit-roads/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.2",
+        "edits": [
+          "Shared colormap texture lightened towards lavender (k=0.55) to match the yard palette",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    },
+    {
+      "id": "light-curved",
+      "role": "street light",
+      "path": "public/assets/env/roads.glb#light-curved",
+      "source_file": "assets-src/kenney-city-kit-roads/light-curved.glb",
+      "status": "approved",
+      "technical": {
+        "format": "glTF 2.0 binary",
+        "units": "Kenney units, scaled in src/scene/site/EnvAssets.tsx",
+        "pivot": "base center",
+        "up_axis": "+Y"
+      },
+      "visual_locks": [
+        "palette",
+        "silhouette",
+        "light-direction"
+      ],
+      "source": {
+        "kind": "sourced",
+        "url_or_tool": "https://kenney.nl/assets/city-kit-roads",
+        "creator": "Kenney (www.kenney.nl)",
+        "created_at": "2026-10-19",
+        "license": "CC0-1.0",
+        "license_text": "assets-src/kenney-city-kit-roads/License.txt",
+        "attribution": "Not required. Credited in assets-src/CREDITS.md.",
+        "kit_version": "2.2",
+        "edits": [
+          "Shared colormap texture lightened towards lavender (k=0.55) to match the yard palette",
+          "Merged into one bundle; dedup/prune/weld (scripts/build-env-assets.mjs)"
+        ]
+      },
+      "verification": {
+        "native_scale_reviewed": true,
+        "in_engine_reviewed": true,
+        "technical_checks_passed": true,
+        "approved_by": "Claude (agent); pending human review"
+      }
+    }
+  ]
+}
