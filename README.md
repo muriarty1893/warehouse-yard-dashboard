@@ -4,6 +4,8 @@ The 3D yard twin for **Docktor** (spec: `~/Desktop/Docktor/Docktor-Authoritative
 styled after the WareTrack demo, with an operations dashboard on top. No camera/CV pipeline or live data yet:
 vehicles and people are simulated, cargo and documents are entered by hand.
 
+![Docktor yard twin: walled yard with free-form storage, loading bays and the operations dashboard](docs/screenshot.png)
+
 ```bash
 npm install
 npm run dev        # http://localhost:5173
