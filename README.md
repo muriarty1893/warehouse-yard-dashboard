@@ -5,6 +5,8 @@ operations dashboard on top. Trucks, forklifts and workers move through the yard
 in free-form storage areas, and each unit can carry its source documents (bill, CMR, delivery note,
 invoice), entered by hand.
 
+**Live demo: https://warehouse-yard-dashboard.vercel.app/**
+
 ![Docktor yard twin: walled yard with free-form storage, loading bays and the operations dashboard](docs/screenshot.png)
 
 ## How it's made
