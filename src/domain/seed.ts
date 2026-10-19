@@ -1,9 +1,8 @@
-import type { Cargo, CargoLook, CargoType, Dimensions, StoragePosition, YardConfig } from './types';
-import { allPositions } from './yard';
+import type { Cargo, CargoLook, CargoType, Dimensions, DocumentType, SourceDocument } from './types';
 
 /**
- * Deterministic sample World State for the dev yard (spec §44): simulated
- * cargo sitting in storage positions. Same seed → same yard every reload.
+ * Deterministic sample data for the dev yard (spec §44): what demo cargo is
+ * made of, and its paperwork. Where it goes is decided by world/demo.ts.
  */
 
 export function mulberry32(seed: number) {
@@ -114,126 +113,90 @@ const LOOKS: Record<Exclude<CargoLook, 'container' | 'group-cartons'>, LookSpec>
   },
 };
 
-type FixedSlot = { look: CargoLook; levels?: number; id?: string; pinned?: boolean; description?: string };
+/** Can something be stacked on top of this look? */
+export const isStackable = (look: CargoLook) => look === 'container' || look === 'group-cartons' || LOOKS[look].stackable;
 
-/** Slots with fixed content: spec examples + slots that forklifts work. */
-const FIXED: Record<string, FixedSlot | 'empty'> = {
-  B17: { look: 'cartons', id: 'CARGO-18492', pinned: true, description: 'Pallet · Ankara' },
-  C05: { look: 'group-cartons', id: 'GROUP-0042', pinned: true, description: '20 identical boxes' },
-  B16: { look: 'cartons', levels: 1 },
-  A05: { look: 'bag', levels: 1 },
-  A10: { look: 'drum', pinned: true },
-  B08: { look: 'wrap-blue', levels: 2, pinned: true },
-};
-
-/** Open storage gets weatherproof goods; the covered hold spaces get palletized goods. */
-const ZONE_MIX: Record<string, Partial<Record<CargoLook, number>>> = {
-  A: { crate: 0.3, drum: 0.25, pipes: 0.2, machine: 0.1, bag: 0.15 },
-  B: { cartons: 0.5, 'wrap-blue': 0.3, 'wrap-white': 0.2 },
-  C: { cartons: 0.35, 'wrap-blue': 0.25, crate: 0.2, bag: 0.2 },
-};
-
-export function seedCargo(yard: YardConfig): Cargo[] {
-  const rng = mulberry32(18492);
-  const cargo: Cargo[] = [];
-  let serial = 18400;
-  const nextId = () => {
-    serial += 1;
-    if (serial === 18492) serial += 1;
-    return `CARGO-${serial}`;
-  };
-
-  const place = (pos: StoragePosition, look: CargoLook, levels: number, fixed?: FixedSlot) => {
-    for (let level = 0; level < levels; level++) {
-      const id = level === 0 && fixed?.id ? fixed.id : nextId();
-      const pinned = !!fixed?.pinned && level === levels - 1;
-      cargo.push(makeCargo(rng, id, look, pos, level, pinned, fixed?.description));
-    }
-  };
-
-  for (const pos of allPositions(yard)) {
-    const fixed = FIXED[pos.id];
-    if (fixed === 'empty') continue;
-    if (fixed) {
-      place(pos, fixed.look, fixed.levels ?? 1, fixed);
-      continue;
-    }
-    const zone = yard.zones.find((z) => z.id === pos.zoneId);
-    if (zone?.kind === 'container') {
-      if (rng() < 0.15) continue;
-      place(pos, 'container', rng() < 0.4 ? 2 : 1);
-      continue;
-    }
-    const mix = ZONE_MIX[pos.zoneId];
-    if (!mix || rng() > 0.78) continue;
-    const look = weighted(rng, mix);
-    const spec = LOOKS[look as keyof typeof LOOKS];
-    const levels = spec?.stackable && rng() < 0.38 ? Math.min(2, pos.maxStack) : 1;
-    place(pos, look, levels);
-  }
-  return cargo;
+/** Type and typical size/weight of a new cargo unit of this look (forms prefill these). */
+export function lookDefaults(look: Exclude<CargoLook, 'container' | 'group-cartons'>) {
+  const mid = () => 0.5;
+  const spec = LOOKS[look];
+  return { type: spec.type, dims: spec.dims(mid), weightKg: Math.round(spec.weight(mid) / 10) * 10 };
 }
 
-function makeCargo(
-  rng: Rng,
-  id: string,
-  look: CargoLook,
-  pos: StoragePosition,
-  stackLevel: number,
-  pinned: boolean,
-  description?: string,
-): Cargo {
-  const destination = id === 'CARGO-18492' ? 'Ankara' : pick(rng, DESTINATIONS);
-  if (look === 'container') {
-    const livery = pick(rng, CONTAINER_LIVERIES);
-    // Size is per position so a stack never puts a 40′ on top of a 20′.
-    const fortyFoot = hashString(pos.id) % 4 !== 0;
-    return {
-      id,
-      type: 'container',
-      look,
-      description: `${fortyFoot ? '40′' : '20′'} Container · ${livery.brand}`,
-      destination,
-      weightKg: Math.round((fortyFoot ? 9000 : 5000) + rng() * 14000),
-      dims: { l: 2.44, w: fortyFoot ? 12.19 : 6.06, h: 2.59 },
-      positionId: pos.id,
-      stackLevel,
-      color: livery.color,
-      brand: livery.brand,
-      pinned,
-    };
-  }
+export type UnitLook = Exclude<CargoLook, 'container'>;
+
+/** A cargo unit's record without its location: what the goods are. */
+export function makeUnit(rng: Rng, id: string, look: UnitLook, opts: { destination?: string; description?: string } = {}): Omit<Cargo, 'x' | 'y' | 'yaw' | 'on' | 'areaId'> {
+  const destination = opts.destination ?? pick(rng, DESTINATIONS);
   if (look === 'group-cartons') {
-    return {
-      id,
-      type: 'group',
-      look,
-      description: description ?? 'Box group',
-      destination: 'Ankara',
-      weightKg: 800,
-      dims: { l: 1.7, w: 1.5, h: 0.42 },
-      positionId: pos.id,
-      stackLevel,
-      pinned,
-    };
+    return { id, type: 'group', look, description: opts.description ?? 'Box group', destination, weightKg: 800, dims: { l: 1.7, w: 1.5, h: 0.42 } };
   }
   const spec = LOOKS[look];
-  const cargo: Cargo = {
-    id,
-    type: spec.type,
-    look,
-    description: description ?? spec.describe(rng),
-    destination,
-    weightKg: spec.weight(rng),
-    dims: spec.dims(rng),
-    positionId: pos.id,
-    stackLevel,
-    pinned,
-  };
-  if (id === 'CARGO-18492') {
-    // Spec §8 example record.
-    cargo.weightKg = 720;
-    cargo.dims = { l: 1.2, w: 0.8, h: 1.0 };
+  return { id, type: spec.type, look, description: opts.description ?? spec.describe(rng), destination, weightKg: spec.weight(rng), dims: spec.dims(rng) };
+}
+
+export { DESTINATIONS, pick, weighted };
+export type { Rng };
+
+// ---------------------------------------------------------------------------
+// Demo source documents: most cargo has its paperwork entered, some does not
+// (so the "missing documents" view has something to show).
+
+const SHIPPERS = ['Ege Seramik A.Ş.', 'Marmara Elektrik', 'Konya Tarım Ltd.', 'Bursa Tekstil A.Ş.', 'Anadolu Ambalaj', 'Kapadokya Mobilya', 'Akdeniz Gıda A.Ş.', 'Trakya Kablo San.'];
+const CONSIGNEES = ['Anadolu Market', 'Karadeniz Lojistik', 'Başkent Yapı', 'Delta Perakende', 'Orion Makina', 'Yıldız Depoculuk'];
+const DOC_MIX: Partial<Record<DocumentType, number>> = { delivery_note: 0.4, cmr: 0.25, invoice: 0.2, bill_of_lading: 0.1, packing_list: 0.05 };
+const CURRENCIES = ['TRY', 'EUR', 'USD'];
+
+export function documentNumber(type: DocumentType, n: number): string {
+  const pad = (k: number) => String(n % 10 ** k).padStart(k, '0');
+  switch (type) {
+    case 'bill_of_lading':
+      return `BL-26-${pad(5)}`;
+    case 'cmr':
+      return `CMR ${pad(7)}`;
+    case 'delivery_note':
+      return `DN-2026-${pad(6)}`;
+    case 'invoice':
+      return `INV-2026-${pad(5)}`;
+    case 'packing_list':
+      return `PL-${pad(5)}`;
+    case 'customs':
+      return `TR-26-34-EX-${pad(7)}`;
+    default:
+      return `DOC-${pad(6)}`;
   }
-  return cargo;
+}
+
+export function seedDocuments(cargo: Cargo[], now = Date.UTC(2026, 9, 19, 8, 30)): SourceDocument[] {
+  const rng = mulberry32(77031);
+  const docs: SourceDocument[] = [];
+  cargo.forEach((c, i) => {
+    // CARGO-18492 is the spec's worked example: keep it documented.
+    if (c.id !== 'CARGO-18492' && rng() < 0.22) return;
+    const type = weighted(rng, DOC_MIX);
+    const day = 12 + Math.floor(rng() * 8);
+    const pieces = c.type === 'group' ? 20 : c.look === 'cartons' ? Math.round(c.dims.h / 0.4) * 4 : 1;
+    docs.push({
+      id: `DOC-${String(1001 + i).padStart(5, '0')}`,
+      cargoId: c.id,
+      type,
+      number: documentNumber(type, Math.floor(rng() * 1e7)),
+      issuedOn: `2026-10-${String(day).padStart(2, '0')}`,
+      shipper: pick(rng, SHIPPERS),
+      consignee: `${pick(rng, CONSIGNEES)} · ${c.destination}`,
+      origin: pick(rng, DESTINATIONS),
+      destination: c.destination,
+      pieces,
+      grossKg: c.weightKg,
+      value: type === 'invoice' ? Math.round(2000 + rng() * 48000) : undefined,
+      currency: type === 'invoice' ? pick(rng, CURRENCIES) : undefined,
+      items: `${pieces} × ${c.description}`,
+      source: 'demo',
+      status: rng() < 0.86 ? 'confirmed' : 'draft',
+      createdBy: 'Deniz Kaya',
+      createdAt: now - Math.floor(rng() * 6 * 86400e3),
+      updatedAt: now,
+    });
+  });
+  return docs;
 }

@@ -1,8 +1,10 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { Vec2, YardConfig } from '../../domain/types';
-import { Box, Cyl, mat, palette, RBox, unitBox, unitCylinder, yardToWorld } from '../kit';
+import { Box, Cyl, glowMat, LightPool, mat, palette, RBox, unitBox, unitCylinder, yardToWorld } from '../kit';
+import { devYard } from '../../config/devYard';
 import { Merge } from '../Merge';
+import { useLayers } from '../../state/layers';
 
 type Inst = { position: [number, number, number]; scale: [number, number, number]; rotation?: number };
 
@@ -58,38 +60,54 @@ function fenceRuns(yard: YardConfig): [Vec2, Vec2][] {
   return runs;
 }
 
-function Fence({ yard }: { yard: YardConfig }) {
-  const { posts, rails, panels } = useMemo(() => {
-    const posts: Inst[] = [];
-    const rails: Inst[] = [];
+/**
+ * High precast-concrete boundary walls: panels between pilasters, a coping on
+ * top, tall posts either side of the entrance. The "walls" layer cuts them
+ * down so the yard can be seen from a low camera.
+ */
+function Walls({ yard }: { yard: YardConfig }) {
+  const full = useLayers((s) => s.walls);
+  const H = full ? yard.wallHeight : 0.9;
+  const { panels, posts, joints, caps } = useMemo(() => {
     const panels: Inst[] = [];
-    const H = 2.1;
+    const posts: Inst[] = [];
+    const joints: Inst[] = [];
+    const caps: Inst[] = [];
+    const T = 0.25;
     for (const [a, b] of fenceRuns(yard)) {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 0.2) continue;
       const heading = Math.atan2(b[1] - a[1], b[0] - a[0]);
-      const count = Math.max(1, Math.round(len / 3));
+      // Wall stands just inside the boundary line.
+      const nx = -Math.sin(heading) * (T / 2);
+      const ny = Math.cos(heading) * (T / 2);
+      const mx = (a[0] + b[0]) / 2 + nx;
+      const my = (a[1] + b[1]) / 2 + ny;
+      panels.push({ position: yardToWorld(mx, my, H / 2), scale: [len, H, T], rotation: heading });
+      caps.push({ position: yardToWorld(mx, my, H + 0.06), scale: [len + 0.1, 0.12, T + 0.16], rotation: heading });
+      const count = Math.max(1, Math.round(len / 4));
       for (let i = 0; i <= count; i++) {
         const t = i / count;
-        posts.push({ position: yardToWorld(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, H / 2), scale: [0.09, H, 0.09] });
+        const x = a[0] + (b[0] - a[0]) * t + nx * 1.6;
+        const y = a[1] + (b[1] - a[1]) * t + ny * 1.6;
+        const end = i === 0 || i === count;
+        posts.push({ position: yardToWorld(x, y, (H + (end ? 0.3 : 0.1)) / 2), scale: [end ? 0.6 : 0.42, H + (end ? 0.3 : 0.1), end ? 0.6 : 0.42], rotation: heading });
+        if (!end) {
+          // Horizontal joint halfway up each panel.
+          const xm = a[0] + (b[0] - a[0]) * (t - 0.5 / count) + nx * 2.05;
+          const ym = a[1] + (b[1] - a[1]) * (t - 0.5 / count) + ny * 2.05;
+          joints.push({ position: yardToWorld(xm, ym, H * 0.5), scale: [len / count - 0.4, 0.05, 0.02], rotation: heading });
+        }
       }
-      const mx = (a[0] + b[0]) / 2;
-      const my = (a[1] + b[1]) / 2;
-      rails.push({ position: yardToWorld(mx, my, H - 0.04), scale: [len, 0.07, 0.07], rotation: heading });
-      rails.push({ position: yardToWorld(mx, my, 0.12), scale: [len, 0.07, 0.05], rotation: heading });
-      panels.push({ position: yardToWorld(mx, my, H / 2), scale: [len, H - 0.15, 0.02], rotation: heading });
     }
-    return { posts, rails, panels };
-  }, [yard]);
+    return { panels, posts, joints, caps };
+  }, [yard, H]);
   return (
     <group>
-      <Instanced geometry={unitBox} material={mat('#a7b0c4', { roughness: 0.5, metalness: 0.2 })} items={posts} />
-      <Instanced geometry={unitBox} material={mat('#b4bccd', { roughness: 0.5, metalness: 0.2 })} items={rails} />
-      <Instanced
-        geometry={unitBox}
-        material={mat('#c9d0de', { transparent: true, opacity: 0.32, roughness: 0.6 })}
-        items={panels}
-        castShadow={false}
-      />
+      <Instanced key={`p${H}`} geometry={unitBox} material={mat('#d3d8e2', { roughness: 0.92 })} items={panels} />
+      <Instanced key={`c${H}`} geometry={unitBox} material={mat('#e7eaf0', { roughness: 0.85 })} items={caps} />
+      <Instanced key={`s${H}`} geometry={unitBox} material={mat('#c3c9d6', { roughness: 0.9 })} items={posts} />
+      <Instanced key={`j${H}`} geometry={unitBox} material={mat('#b4bccb', { roughness: 0.9 })} items={joints} castShadow={false} />
     </group>
   );
 }
@@ -97,13 +115,7 @@ function Fence({ yard }: { yard: YardConfig }) {
 // ---------------------------------------------------------------------------
 // Light poles and bollards.
 
-const POLES: { x: number; y: number; heading: number }[] = [
-  { x: 1.2, y: 1.2, heading: Math.PI / 4 },
-  { x: 1.2, y: 24, heading: 0 },
-  { x: 29.8, y: 1.1, heading: Math.PI / 2 },
-  { x: 50.3, y: 1.1, heading: Math.PI / 2 },
-  { x: 52.8, y: 13.2, heading: Math.PI },
-];
+const POLES = devYard.fixtures.filter((f) => f.kind === 'lightPole');
 
 function LightPole({ x, y, heading }: { x: number; y: number; heading: number }) {
   const pole = mat('#b9c1d1', { roughness: 0.4, metalness: 0.4 });
@@ -113,26 +125,26 @@ function LightPole({ x, y, heading }: { x: number; y: number; heading: number })
       <Cyl r={0.1} h={9} position={[0, 4.5, 0]} material={pole} />
       <Box size={[1.6, 0.1, 0.1]} position={[0.75, 8.9, 0]} material={pole} />
       <RBox size={[0.9, 0.16, 0.42]} position={[1.4, 8.82, 0]} color="#dfe4ee" radius={0.05} />
-      <Box size={[0.8, 0.02, 0.34]} position={[1.4, 8.73, 0]} material={mat('#fff8de', { emissive: '#fff3c4', emissiveIntensity: 0.6 })} shadow={false} />
+      <Box size={[0.8, 0.02, 0.34]} position={[1.4, 8.73, 0]} material={glowMat('#fff8de', '#fff3c4', 0.6, 3.2)} shadow={false} />
     </group>
   );
 }
 
-const BOLLARDS: Vec2[] = [
-  [30.2, 0.8], [49.8, 0.8], [30.2, 2.6], [49.8, 2.6],
-  [21.3, 20.6], [28.9, 20.6], [53.4, 11.3], [20.0, 26.6],
-];
+const BOLLARDS = devYard.fixtures.filter((f) => f.kind === 'bollard').map((f): Vec2 => [f.x, f.y]);
 
 export function Scenery({ yard }: { yard: YardConfig }) {
   const bollards = useMemo<Inst[]>(() => BOLLARDS.map(([x, y]) => ({ position: yardToWorld(x, y, 0.5), scale: [0.13, 1, 0.13] })), []);
   return (
     <group>
-      <Fence yard={yard} />
+      <Walls yard={yard} />
       <Merge>
-        {POLES.map((p, i) => (
-          <LightPole key={i} {...p} />
+        {POLES.map((p) => (
+          <LightPole key={p.id} x={p.x} y={p.y} heading={p.heading} />
         ))}
       </Merge>
+      {POLES.map((p, i) => (
+        <LightPool key={i} x={p.x + Math.cos(p.heading) * 1.4} y={p.y + Math.sin(p.heading) * 1.4} r={7.5} />
+      ))}
       <Instanced geometry={unitCylinder} material={mat(palette.yellow, { roughness: 0.5 })} items={bollards} />
     </group>
   );

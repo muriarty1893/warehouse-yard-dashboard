@@ -16,53 +16,30 @@ export interface Rect {
   h: number;
 }
 
-export type ZoneKind = 'storage' | 'container' | 'loading' | 'staging';
-
-export interface StorageGrid {
-  cols: number;
-  rows: number;
-  /** Slot footprint: [along x, along y]. */
-  slot: Vec2;
-  colGap: number;
-  /** Rows are laid out back-to-back in pairs, separated by forklift aisles. */
-  pairGap: number;
-  aisle: number;
-  /** Space kept free at the zone's north edge for the painted zone label. */
-  labelSpace: number;
-  maxStack: number;
-}
-
-export interface Zone {
+/**
+ * Free-form storage area (the yellow spaces on the yard plan). There are no
+ * fixed slots: cargo goes wherever there is room, and how full an area is
+ * changes with the day. An area may be made of several polygons.
+ */
+export interface StorageArea {
   id: string;
   name: string;
-  /** Short description shown in the dashboard. */
   description?: string;
-  kind: ZoneKind;
-  rect: Rect;
-  /** Floor height of the zone (meters) — e.g. on a raised platform. */
+  /** Polygons in yard meters. */
+  parts: Vec2[][];
+  /** Floor height (raised hold-space platform). */
   elevation?: number;
-  grid?: StorageGrid;
-  /** Tint used for the painted zone label. */
+  covered?: boolean;
+  /** Tint used in the dashboard for this area. */
   color: string;
-}
-
-export interface StoragePosition {
-  id: string;
-  zoneId: string;
-  /** Slot center. */
-  x: number;
-  y: number;
-  /** Footprint along x / along y. */
-  w: number;
-  d: number;
+  /** Highest stack allowed here (units). */
   maxStack: number;
-  /** Floor height of the slot. */
-  z: number;
-  /** Which aisle a forklift approaches this slot from. */
-  face: 'north' | 'south';
 }
 
-export type BayKind = 'dock' | 'loading' | 'staging';
+/** Where a cargo unit stands: a floor spot (center + rotation), or on top of another unit. */
+export type Spot = { x: number; y: number; yaw: number } | { on: string };
+
+export type BayKind = 'dock' | 'loading' | 'staging' | 'parking';
 
 export interface TruckBay {
   id: string;
@@ -72,6 +49,15 @@ export interface TruckBay {
   width: number;
   /** Direction (radians, CCW from east) a parked truck faces. */
   heading: number;
+}
+
+export interface Door {
+  side: 'north' | 'south' | 'east' | 'west';
+  /** Distance of the door center from the wall's west / south end (meters). */
+  at: number;
+  width: number;
+  /** Sill height (a door onto the raised platform). */
+  sill?: number;
 }
 
 export interface Building {
@@ -84,6 +70,7 @@ export interface Building {
   /** Raised floor height (canopy platforms). */
   elevation?: number;
   floors?: number;
+  doors?: Door[];
   /** Dock door centers along the building's south face (x, meters). */
   docks?: { id: string; x: number }[];
   subtitle?: string;
@@ -122,13 +109,29 @@ export interface Ramp {
   up: 'north' | 'south' | 'east' | 'west';
 }
 
+/** Furniture and equipment that takes up floor space (manager tables, chargers, empty pallets…). */
+export interface Fixture {
+  id: string;
+  kind: 'desk' | 'charger' | 'pallets' | 'skip' | 'bins' | 'extinguisher' | 'cones' | 'palletJack' | 'lightPole' | 'bollard';
+  /** Pallets in a stack / bins in a row. */
+  count?: number;
+  label?: string;
+  x: number;
+  y: number;
+  /** Direction the front faces (radians, yard frame). */
+  heading: number;
+}
+
 export interface YardConfig {
   id: string;
   name: string;
-  /** Yard boundary polygon (counter-clockwise). L-shaped for the dev yard. */
+  /** Yard boundary polygon (counter-clockwise), walled. */
   boundary: Vec2[];
+  /** Height of the boundary wall. */
+  wallHeight: number;
   gates: Gate[];
-  zones: Zone[];
+  storage: StorageArea[];
+  fixtures: Fixture[];
   bays: TruckBay[];
   buildings: Building[];
   ramps: Ramp[];
@@ -179,13 +182,73 @@ export interface Cargo {
   destination: string;
   weightKg: number;
   dims: Dimensions;
-  positionId: string;
-  stackLevel: number;
+  /** Footprint center on the floor and rotation (0 = length along east). Same as the unit below for stacked units. */
+  x: number;
+  y: number;
+  yaw: number;
+  /** Unit this one is stacked on (null = on the floor). */
+  on: string | null;
+  /** Storage area the unit stands in (null = elsewhere in the yard). */
+  areaId: string | null;
+  /** Demo data, or registered by hand. */
+  source?: 'demo' | 'manual';
   /** Container livery / pallet tint where relevant. */
   color?: string;
   brand?: string;
   /** Show a location pin above this cargo. */
   pinned?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Source documents (spec §10, §37, §39)
+
+export type DocumentType = 'bill_of_lading' | 'cmr' | 'delivery_note' | 'invoice' | 'packing_list' | 'customs' | 'other';
+
+/**
+ * The paper a cargo record comes from: bill, CMR, delivery note, invoice…
+ * Entered by hand for now (the spec's manual-entry fallback); OCR extraction
+ * will fill the same record later. Drafts are not authoritative until confirmed.
+ */
+export interface SourceDocument {
+  id: string;
+  cargoId: string;
+  type: DocumentType;
+  /** Number as printed on the document (bill no., CMR no., …). */
+  number: string;
+  /** YYYY-MM-DD */
+  issuedOn: string;
+  shipper: string;
+  consignee: string;
+  carrier?: string;
+  origin?: string;
+  destination?: string;
+  pieces?: number;
+  grossKg?: number;
+  value?: number;
+  currency?: string;
+  /** Item list / goods description, one item per line. */
+  items?: string;
+  notes?: string;
+  /** Photo of the paper document (downscaled JPEG data URL). */
+  photo?: string;
+  source: 'manual' | 'demo';
+  status: 'draft' | 'confirmed';
+  createdBy: string;
+  /** Epoch ms. */
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type CargoEventKind = 'registered' | 'moved' | 'edited' | 'released' | 'document';
+
+export interface CargoEvent {
+  id: string;
+  cargoId: string;
+  kind: CargoEventKind;
+  text: string;
+  /** Epoch ms and the yard clock at the time. */
+  at: number;
+  yardTime: string;
 }
 
 // ---------------------------------------------------------------------------

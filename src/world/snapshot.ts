@@ -1,10 +1,15 @@
 import { devYard } from '../config/devYard';
 import { forklifts, trucks, workers, type TruckSpec } from '../config/fleet';
-import { hashString, seedCargo } from '../domain/seed';
-import type { BayKind, Rect, TruckBay } from '../domain/types';
+import { hashString } from '../domain/seed';
+import type { BayKind, Cargo, Rect, TruckBay } from '../domain/types';
 import { CARRIER_NAMES, parkInBay } from '../domain/vehicles';
-import { allPositions, positionIndex } from '../domain/yard';
+import { areaAt } from '../domain/yard';
+import { usableFloor } from './clearance';
+import { entityTime, useControl } from '../sim/control';
 import { compileRoute, evalRoute, newPose, type CompiledRoute, type RoutePose } from '../sim/route';
+import type { EntityRef } from '../state/ui';
+import type { Overlay } from '../state/layers';
+import { labelledCargo, useInventory } from './inventory';
 import { fmtClock, fmtDuration } from './time';
 
 /**
@@ -14,8 +19,8 @@ import { fmtClock, fmtDuration } from './time';
  */
 
 export const yard = devYard;
-export const cargo = seedCargo(devYard);
-export const positions = positionIndex(devYard);
+/** Current cargo records (edited by hand through the inventory store). */
+export const currentCargo = () => useInventory.getState().cargo;
 
 export type TruckStatus = 'scheduled' | 'en-route' | 'at-gate' | 'docking' | 'loading' | 'unloading' | 'departing' | 'departed' | 'waiting' | 'dropped';
 export type ForkliftStatus = 'picking' | 'carrying' | 'loading' | 'returning' | 'charging' | 'idle';
@@ -63,6 +68,8 @@ export interface TruckState {
   shipment: Shipment;
   steps: ShipmentStep[];
   scripted: boolean;
+  /** Stopped by a manager (hold / emergency stop). */
+  held: boolean;
 }
 
 export interface ForkliftState {
@@ -79,6 +86,8 @@ export interface ForkliftState {
   where: string;
   x: number;
   y: number;
+  scripted: boolean;
+  held: boolean;
 }
 
 export interface WorkerState {
@@ -102,13 +111,14 @@ export interface BayState {
   y: number;
 }
 
-export interface ZoneState {
+export interface AreaState {
   id: string;
   name: string;
   kind: string;
   color: string;
+  /** Pallet spots taken vs. spots that fit on the usable floor (corridors excluded). */
   used: number;
-  total: number;
+  capacity: number;
   units: number;
 }
 
@@ -116,6 +126,9 @@ export interface Alert {
   id: string;
   level: 'info' | 'warn';
   text: string;
+  /** What clicking the alert does: select an entity, or switch on a map overlay. */
+  ref?: EntityRef;
+  overlay?: Overlay;
 }
 
 export interface Kpis {
@@ -124,9 +137,10 @@ export interface Kpis {
   trucksOnSite: number;
   arrivalsToday: number;
   inbound: number;
+  /** Storage spots taken across all areas. */
   storagePct: number;
-  positionsUsed: number;
-  positionsTotal: number;
+  spotsUsed: number;
+  spotsTotal: number;
   departuresToday: number;
   /** Truck loading spaces / docks in use. */
   docksBusy: number;
@@ -134,6 +148,10 @@ export interface Kpis {
   staged: number;
   forkliftsWorking: number;
   forkliftsTotal: number;
+  /** Cargo units without any source document / with only drafts. */
+  docsMissing: number;
+  docsDraft: number;
+  documents: number;
 }
 
 export interface WorldSnapshot {
@@ -143,7 +161,7 @@ export interface WorldSnapshot {
   forklifts: ForkliftState[];
   workers: WorkerState[];
   bays: BayState[];
-  zones: ZoneState[];
+  areas: AreaState[];
   kpis: Kpis;
   alerts: Alert[];
 }
@@ -177,7 +195,8 @@ export function whereIs(x: number, y: number): string {
     const across = -(x - bay.center[0]) * Math.sin(bay.heading) + (y - bay.center[1]) * Math.cos(bay.heading);
     if (Math.abs(along) <= bay.length / 2 && Math.abs(across) <= bay.width / 2) return bay.id;
   }
-  for (const z of yard.zones) if (inRect(z.rect, x, y)) return z.name;
+  const area = areaAt(yard, x, y);
+  if (area) return area.name;
   for (const r of yard.ramps) if (inRect(r.rect, x, y)) return 'Forklift ramp';
   for (const a of yard.areas) if (inRect(a.rect, x, y) && AREA_NAMES[a.id]) return AREA_NAMES[a.id];
   for (const b of yard.buildings) if (inRect(b.rect, x, y)) return b.name;
@@ -284,11 +303,14 @@ function truckState(m: TruckModel, t: number): TruckState {
     bayId: bay?.id ?? null,
     shipment,
     scripted: !!route,
+    held: false,
   };
   const labels = ['Checked in', `At ${bay?.id ?? 'bay'}`, verb, 'Departed', shipment.direction === 'inbound' ? 'Released' : 'Delivered'];
 
+  const held = useControl.getState().holds[spec.id] !== undefined;
   if (route) {
-    const pose = evalRoute(route, t, tmp);
+    const te = entityTime(spec.id, t);
+    const pose = evalRoute(route, te, tmp);
     const start = t - pose.local;
     const legStart = (i: number) => start + route.legs[i].t0;
     const legEnd = (i: number) => legStart(i) + route.legs[i].duration;
@@ -305,13 +327,14 @@ function truckState(m: TruckModel, t: number): TruckState {
       const eta = leaving ? null : (pose.visible ? legEnd(0) : t + pose.untilStart + route.legs[0].duration) - t;
       return {
         ...base,
+        held: held && pose.visible,
         status: leaving ? 'departed' : pose.visible ? 'en-route' : 'scheduled',
         detail: leaving ? `Departed · to ${shipment.place}` : `Arriving at Gate 1 in ${fmtDuration(eta ?? 0)}`,
         onSite: false,
         x: pose.x,
         y: pose.y,
         where: pose.visible ? 'Public road' : 'Off site',
-        speedKmh: pose.visible ? speedOf(route, t, pose) : 0,
+        speedKmh: pose.visible && !held ? speedOf(route, te, pose) : 0,
         progress: leaving ? { done: total, total } : null,
         etaSec: eta,
         steps: steps(labels, times, leaving ? 4 : 0, t),
@@ -325,9 +348,11 @@ function truckState(m: TruckModel, t: number): TruckState {
     const etaSec = working ? legEnd(work) - t : pose.leg < work ? legStart(work) - t : null;
     return {
       ...base,
+      held,
       status,
-      detail:
-        status === 'at-gate'
+      detail: held
+        ? `On hold · ${whereIs(pose.x, pose.y)}`
+        : status === 'at-gate'
           ? pose.leg <= gateIn
             ? 'Checking in at Gate 1'
             : 'Checking out at Gate 1'
@@ -340,7 +365,7 @@ function truckState(m: TruckModel, t: number): TruckState {
       x: pose.x,
       y: pose.y,
       where: whereIs(pose.x, pose.y),
-      speedKmh: speedOf(route, t, pose),
+      speedKmh: held ? 0 : speedOf(route, te, pose),
       progress: working || pose.leg > work ? { done, total } : null,
       etaSec,
       steps: steps(labels, times, current, t),
@@ -358,7 +383,7 @@ function truckState(m: TruckModel, t: number): TruckState {
   if (spec.activity === 'loading' || spec.activity === 'unloading') {
     const fl = forkliftOf(spec.id);
     const pace = fl?.route ? fl.route.period : m.pace;
-    const done = (m.base + (fl?.route ? cyclesDone(fl.route, t) : Math.floor(t / pace))) % (total + 1);
+    const done = (m.base + (fl?.route ? cyclesDone(fl.route, entityTime(fl.spec.id, t)) : Math.floor(t / pace))) % (total + 1);
     progress = { done, total };
     status = spec.activity;
     etaSec = (total - done) * pace;
@@ -404,15 +429,21 @@ function forkliftState(m: (typeof forkliftModels)[number], t: number): ForkliftS
       where: whereIs(p.x, p.y),
       x: p.x,
       y: p.y,
+      scripted: false,
+      held: false,
     };
   }
-  const pose = evalRoute(route, t, tmp);
-  const cycles = cyclesDone(route, t);
+  const te = entityTime(spec.id, t);
+  const held = useControl.getState().holds[spec.id] !== undefined;
+  const pose = evalRoute(route, te, tmp);
+  const cycles = cyclesDone(route, te);
   const truck = spec.serves ?? 'truck';
   const bay = truckModels.find((tm) => tm.spec.id === spec.serves)?.bay?.id ?? '';
   const statusMap: Record<string, ForkliftStatus> = { picking: 'picking', carrying: 'carrying', working: 'loading', returning: 'returning' };
   const status = statusMap[pose.phase ?? ''] ?? 'returning';
-  const detail = !spec.serves
+  const detail = held
+    ? `On hold · ${whereIs(pose.x, pose.y)}`
+    : !spec.serves
     ? pose.status
     : status === 'picking'
       ? `Picking at ${spec.pick}`
@@ -421,47 +452,53 @@ function forkliftState(m: (typeof forkliftModels)[number], t: number): ForkliftS
         : status === 'loading'
           ? `Loading ${truck} at ${bay}`
           : 'Returning to pick';
-  const top = cargo.filter((c) => c.positionId === spec.pick).sort((a, b) => b.stackLevel - a.stackLevel)[0];
+  const pick = spec.pick;
+  const near = pick ? currentCargo().filter((c) => Math.hypot(c.x - pick[0], c.y - pick[1]) < 1) : [];
+  const top = near.find((c) => !near.some((o) => o.on === c.id));
   return {
     ...common,
     status,
     detail,
-    battery: Math.max(15, spec.battery - t * 0.012),
+    battery: Math.max(15, spec.battery - te * 0.012),
     carrying: pose.carry ? (top?.id ?? 'Pallet') : null,
     movesToday: m.base + cycles * 2 + (pose.leg >= 2 ? 1 : 0),
-    speedKmh: speedOf(route, t, pose),
+    speedKmh: held ? 0 : speedOf(route, te, pose),
     where: whereIs(pose.x, pose.y),
     x: pose.x,
     y: pose.y,
+    scripted: true,
+    held,
   };
 }
 
-const allSlots = allPositions(yard);
+/** Floor one stored unit needs, access space included (≈ a pallet plus its share of the gaps). */
+export const SPOT_M2 = 3.4;
+const capacities = new Map(yard.storage.map((a) => [a.id, Math.floor(usableFloor(a) / SPOT_M2)]));
+/** Big units (crates, machines) take two spots. */
+export const spotsOf = (c: Cargo) => (c.dims.l * c.dims.w > 2.2 ? 2 : 1);
 
-function zoneStates(): ZoneState[] {
-  const usedSlots = new Set(cargo.map((c) => c.positionId));
-  return yard.zones
-    .filter((z) => z.grid)
-    .map((z) => {
-      const slots = allSlots.filter((p) => p.zoneId === z.id);
-      return {
-        id: z.id,
-        name: z.name,
-        kind: z.description ?? z.kind,
-        color: z.color,
-        used: slots.filter((p) => usedSlots.has(p.id)).length,
-        total: slots.length,
-        units: cargo.filter((c) => c.positionId.startsWith(z.id)).length,
-      };
-    });
+function areaStates(cargo: Cargo[]): AreaState[] {
+  return yard.storage.map((a) => {
+    const units = cargo.filter((c) => c.areaId === a.id);
+    return {
+      id: a.id,
+      name: a.name,
+      kind: a.description ?? '',
+      color: a.color,
+      used: units.filter((c) => !c.on).reduce((s, c) => s + spotsOf(c), 0),
+      capacity: capacities.get(a.id) ?? 1,
+      units: units.length,
+    };
+  });
 }
-const zonesStatic = zoneStates();
 
 export function computeSnapshot(t: number): WorldSnapshot {
+  const { cargo, documents, events } = useInventory.getState();
+  const areas = areaStates(cargo);
   const truckStates = truckModels.map((m) => truckState(m, t));
   const forkliftStates = forkliftModels.map((m) => forkliftState(m, t));
   const workerStates: WorkerState[] = workerModels.map(({ spec, route }) => {
-    const p = route ? evalRoute(route, t, tmp) : null;
+    const p = route ? evalRoute(route, entityTime(spec.id, t), tmp) : null;
     const x = p ? p.x : (spec.pose?.x ?? 0);
     const y = p ? p.y : (spec.pose?.y ?? 0);
     return { id: spec.id, name: spec.name, role: spec.role, moving: !!p?.moving, where: whereIs(x, y), x, y };
@@ -477,45 +514,51 @@ export function computeSnapshot(t: number): WorldSnapshot {
     return { id: bay.id, kind: bay.kind, truckId: truck?.id ?? null, carrier: truck?.carrier ?? null, status, progress: truck?.progress ?? null, x: bay.center[0], y: bay.center[1] };
   });
 
-  const loaded = forkliftModels.reduce((s, f) => s + (f.route ? cyclesDone(f.route, t) : 0), 0);
-  const unloader = truckModels.find((m) => m.spec.activity === 'unloading');
-  const received = unloader ? Math.floor(t / unloader.pace) : 0;
-  const visits = truckModels.filter((m) => m.route).map((m) => ({ m, n: Math.max(0, Math.floor((t - (m.route!.spec.offset ?? 0)) / m.route!.period) + 1) }));
+  const visits = truckModels.filter((m) => m.route).map((m) => ({ m, n: Math.max(0, Math.floor((entityTime(m.spec.id, t) - (m.route!.spec.offset ?? 0)) / m.route!.period) + 1) }));
   const departed = truckModels
     .filter((m) => m.route)
     .reduce((s, m) => {
       const r = m.route!;
-      const local = t - (r.spec.offset ?? 0);
+      const local = entityTime(m.spec.id, t) - (r.spec.offset ?? 0);
       const legs = r.legs;
       const departAt = legs[legs.length - 1].t0;
       return s + (local < 0 ? 0 : Math.floor(local / r.period) + ((((local % r.period) + r.period) % r.period) >= departAt ? 1 : 0));
     }, 0);
-  const positionsUsed = zonesStatic.reduce((s, z) => s + z.used, 0);
-  const positionsTotal = zonesStatic.reduce((s, z) => s + z.total, 0);
-  const docks = bays.filter((b) => b.kind !== 'staging');
+  const spotsUsed = areas.reduce((s, a) => s + a.used, 0);
+  const spotsTotal = areas.reduce((s, a) => s + a.capacity, 0);
+  const docks = bays.filter((b) => b.kind === 'loading' || b.kind === 'dock');
 
+  const documented = new Set(documents.map((d) => d.cargoId));
+  const confirmed = labelledCargo(documents);
   const kpis: Kpis = {
-    cargo: cargo.length - loaded + received,
-    cargoDelta: received - loaded,
+    cargo: cargo.length,
+    cargoDelta: events.filter((e) => e.kind === 'registered').length - events.filter((e) => e.kind === 'released').length,
     trucksOnSite: truckStates.filter((s) => s.onSite).length,
     arrivalsToday: visits.reduce((s, v) => s + v.n, 0),
     inbound: truckStates.filter((s) => s.status === 'en-route' || s.status === 'scheduled').length,
-    storagePct: (positionsUsed / positionsTotal) * 100,
-    positionsUsed,
-    positionsTotal,
+    storagePct: (Math.min(spotsUsed, spotsTotal) / spotsTotal) * 100,
+    spotsUsed,
+    spotsTotal,
     departuresToday: departed,
     docksBusy: docks.filter((b) => b.status !== 'available').length,
     docksTotal: docks.length,
-    staged: bays.filter((b) => b.kind === 'staging' && b.status !== 'available').length,
+    staged: bays.filter((b) => (b.kind === 'staging' || b.kind === 'parking') && b.status !== 'available').length,
     forkliftsWorking: forkliftStates.filter((f) => f.status !== 'charging' && f.status !== 'idle').length,
     forkliftsTotal: forkliftStates.length,
+    docsMissing: cargo.filter((c) => !documented.has(c.id)).length,
+    docsDraft: cargo.filter((c) => documented.has(c.id) && !confirmed.has(c.id)).length,
+    documents: documents.length,
   };
 
   const alerts: Alert[] = [];
-  for (const f of forkliftStates) if (f.battery < 45) alerts.push({ id: `bat-${f.id}`, level: 'warn', text: `${f.id} battery ${Math.round(f.battery)}% · ${f.status === 'charging' ? `charging at ${f.charger}` : 'send to charger'}` });
-  for (const tr of truckStates) if (tr.status === 'at-gate') alerts.push({ id: `gate-${tr.id}`, level: 'info', text: `${tr.id} · ${tr.detail}` });
-  for (const tr of truckStates) if (tr.status === 'en-route' && tr.etaSec !== null) alerts.push({ id: `eta-${tr.id}`, level: 'info', text: `${tr.id} (${tr.carrier}) arriving in ${fmtDuration(tr.etaSec)}` });
-  for (const z of zonesStatic) if (z.used / z.total > 0.8) alerts.push({ id: `zone-${z.id}`, level: 'warn', text: `${z.name} at ${Math.round((z.used / z.total) * 100)}% of positions` });
+  const held = [...truckStates, ...forkliftStates].filter((e) => e.held);
+  if (held.length) alerts.push({ id: 'held', level: 'warn', text: `${held.length} vehicle${held.length > 1 ? 's' : ''} on hold · ${held.map((e) => e.id).join(', ')}`, ref: { kind: truckStates.includes(held[0] as TruckState) ? 'truck' : 'forklift', id: held[0].id } });
+  if (kpis.docsMissing) alerts.push({ id: 'docs-missing', level: 'warn', text: `${kpis.docsMissing} cargo units have no source document`, overlay: 'documents' });
+  if (kpis.docsDraft) alerts.push({ id: 'docs-draft', level: 'info', text: `${kpis.docsDraft} cargo units only have draft documents to confirm`, overlay: 'documents' });
+  for (const f of forkliftStates) if (f.battery < 45) alerts.push({ id: `bat-${f.id}`, level: 'warn', text: `${f.id} battery ${Math.round(f.battery)}% · ${f.status === 'charging' ? `charging at ${f.charger}` : 'send to charger'}`, ref: { kind: 'forklift', id: f.id } });
+  for (const tr of truckStates) if (tr.status === 'at-gate') alerts.push({ id: `gate-${tr.id}`, level: 'info', text: `${tr.id} · ${tr.detail}`, ref: { kind: 'truck', id: tr.id } });
+  for (const tr of truckStates) if (tr.status === 'en-route' && tr.etaSec !== null) alerts.push({ id: `eta-${tr.id}`, level: 'info', text: `${tr.id} (${tr.carrier}) arriving in ${fmtDuration(tr.etaSec)}`, ref: { kind: 'truck', id: tr.id } });
+  for (const a of areas) if (a.used / a.capacity > 0.85) alerts.push({ id: `area-${a.id}`, level: 'warn', text: `${a.name} is ${Math.round((a.used / a.capacity) * 100)}% full · little room left`, overlay: 'areas' });
 
-  return { t, clock: fmtClock(t), trucks: truckStates, forklifts: forkliftStates, workers: workerStates, bays, zones: zonesStatic, kpis, alerts };
+  return { t, clock: fmtClock(t), trucks: truckStates, forklifts: forkliftStates, workers: workerStates, bays, areas, kpis, alerts };
 }

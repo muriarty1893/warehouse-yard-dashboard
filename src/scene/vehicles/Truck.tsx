@@ -5,10 +5,12 @@ import type { TruckSpec } from '../../config/fleet';
 import type { Carrier } from '../../domain/types';
 import type { TruckKind } from '../../domain/vehicles';
 import { clock } from '../../sim/clock';
+import { entityTime, isHeld } from '../../sim/control';
+import { useLayers } from '../../state/layers';
 import { compileRoute, evalRoute, newPose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
 import { containerMaterials } from '../cargo/Containers';
-import { Box, Cyl, glassMat, mat, palette, RBox, unitBox, Wheel, yardToWorld } from '../kit';
+import { Box, Cyl, glassMat, glowMat, mat, palette, RBox, unitBox, Wheel, yardToWorld } from '../kit';
 import { Brackets, Tag } from '../markers';
 import { Merge } from '../Merge';
 import { registerEntity } from '../registry';
@@ -35,7 +37,7 @@ function SidePanels({ carrier, length, height, x, y, halfWidth }: { carrier: Car
 /** Rear of a box body / trailer at x = rearX: closed doors, or doors swung open against the sides. */
 function RearDoors({ rearX, y0, h, open }: { rearX: number; y0: number; h: number; open: boolean }) {
   const door = mat('#e7eaf1', { roughness: 0.6 });
-  const lamp = mat('#ff4d4d', { emissive: '#ff2a2a', emissiveIntensity: 0.6 });
+  const lamp = glowMat('#ff4d4d', '#ff2a2a', 0.6, 2.2);
   return (
     <group>
       {open ? (
@@ -66,7 +68,7 @@ function Cab({ front, carrier, tall = 2.55 }: { front: number; carrier: Carrier;
   const lv = LIVERIES[carrier];
   const cabMat = mat(lv.cab, { roughness: 0.4 });
   const cx = front - 1.25;
-  const light = mat('#fff6d6', { emissive: '#fff1c2', emissiveIntensity: 0.5 });
+  const light = glowMat('#fff6d6', '#fff1c2', 0.5, 4);
   return (
     <group>
       <RBox size={[2.5, tall, 2.45]} position={[cx, 1.0 + tall / 2, 0]} material={cabMat} radius={0.22} />
@@ -177,6 +179,9 @@ export function Truck({ spec, interactive = true }: { spec: TruckSpec; interacti
   const pose = useMemo(newPose, []);
   const [doorsOpen, setDoorsOpen] = useState(spec.doorsOpen ?? false);
   const doorsState = useRef(doorsOpen);
+  // Off-site trucks are hidden; their (DOM) tag has to go too.
+  const [onMap, setOnMap] = useState(true);
+  const onMapState = useRef(true);
 
   const spin: Spin | undefined = route
     ? (g) => {
@@ -185,6 +190,7 @@ export function Truck({ spec, interactive = true }: { spec: TruckSpec; interacti
     : undefined;
 
   const highlight = useHighlight('truck', spec.id);
+  const tags = useLayers((s) => s.tags) && interactive;
   const hover = useUi((s) => s.hover);
   const unhover = useUi((s) => s.unhover);
   const select = useUi((s) => s.select);
@@ -198,14 +204,19 @@ export function Truck({ spec, interactive = true }: { spec: TruckSpec; interacti
 
   useFrame(() => {
     if (!route || !root.current || !front.current) return;
-    evalRoute(route, clock.t, pose);
+    evalRoute(route, entityTime(spec.id, clock.t), pose);
     root.current.visible = pose.visible;
+    if (pose.visible !== onMapState.current) {
+      onMapState.current = pose.visible;
+      setOnMap(pose.visible);
+    }
     if (!pose.visible) return;
     root.current.position.set(...yardToWorld(pose.x, pose.y));
     front.current.rotation.y = pose.heading;
     if (rear.current) rear.current.rotation.y = pose.trailerHeading;
     for (const w of wheels.current) w.rotation.z = -pose.odometer / (w.userData.radius as number);
-    if (statusRef.current && statusRef.current.textContent !== pose.status) statusRef.current.textContent = pose.status;
+    const status = isHeld(spec.id) ? `On hold · ${pose.status}` : pose.status;
+      if (statusRef.current && statusRef.current.textContent !== status) statusRef.current.textContent = status;
     if (pose.doors !== doorsState.current) {
       doorsState.current = pose.doors;
       setDoorsOpen(pose.doors);
@@ -252,9 +263,9 @@ export function Truck({ spec, interactive = true }: { spec: TruckSpec; interacti
           {kind === 'rigid' && <RigidTruck carrier={spec.carrier} doorsOpen={doorsOpen} spin={spin} />}
           {hasTractor && <Tractor carrier={spec.carrier} spin={spin} />}
         </Merge>
-        {highlight && (
+        {(highlight || tags) && onMap && (
           <group position={[b.x, 0, 0]}>
-            <Brackets size={[b.l + 0.4, b.top, 2.9]} strong={highlight === 'selected'} />
+            {highlight && <Brackets size={[b.l + 0.4, b.top, 2.9]} strong={highlight === 'selected'} />}
             <Tag y={b.top + 1.2} title={spec.id} subtitle={spec.status || LIVERIES[spec.carrier].name} statusRef={statusRef} />
           </group>
         )}

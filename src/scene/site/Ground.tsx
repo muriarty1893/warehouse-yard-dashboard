@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { Rect, YardConfig } from '../../domain/types';
-import { zonePositions } from '../../domain/yard';
+import { yardBounds } from '../../domain/yard';
+import { useLayers } from '../../state/layers';
 import { canvasTexture, mat, palette, yardToWorld } from '../kit';
-import { groundExtent, makePainter, paintArea, paintGround, paintZone, ZONE_PPM } from './groundPaint';
+import { AREA_PPM, groundExtent, makePainter, paintArea, paintGrid, paintGround, paintStorageArea, storageDecalRect } from './groundPaint';
 import { GRASS_BEDS } from './landscape';
 
 /** A flat plane lying on the yard floor covering `rect`. */
@@ -50,6 +51,35 @@ function Slab({ rect, height, color, radius = 1.2, holes = [] }: { rect: Rect; h
 
 
 
+const GRID_PPM = 24;
+
+/** Reference grid decal: on the ground, and repeated on top of each raised platform. */
+function GridLayer({ yard }: { yard: YardConfig }) {
+  const on = useLayers((s) => s.grid);
+  const planes = useMemo(() => {
+    const b = yardBounds(yard);
+    const tex = canvasTexture(`grid|${yard.id}`, Math.round(b.w * GRID_PPM), Math.round(b.h * GRID_PPM), (ctx) => paintGrid(ctx, yard, GRID_PPM));
+    const full: Rect = { x: b.x0, y: b.y0, w: b.w, h: b.h };
+    const out = [{ key: 'ground', rect: full, h: 0.016, tex }];
+    for (const p of yard.buildings.filter((x) => x.elevation)) {
+      const t = tex.clone();
+      t.needsUpdate = true;
+      t.repeat.set(p.rect.w / b.w, p.rect.h / b.h);
+      t.offset.set((p.rect.x - b.x0) / b.w, (p.rect.y - b.y0) / b.h);
+      out.push({ key: p.id, rect: p.rect, h: (p.elevation ?? 0) + 0.016, tex: t });
+    }
+    return out.map((o) => ({ ...o, material: new THREE.MeshBasicMaterial({ map: o.tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }) }));
+  }, [yard]);
+  if (!on) return null;
+  return (
+    <group>
+      {planes.map((p) => (
+        <FloorPlane key={p.key} rect={p.rect} h={p.h} material={p.material} receive={false} />
+      ))}
+    </group>
+  );
+}
+
 export function Ground({ yard }: { yard: YardConfig }) {
   const g = useMemo(() => groundExtent(yard), [yard]);
   const groundMat = useMemo(() => {
@@ -58,16 +88,16 @@ export function Ground({ yard }: { yard: YardConfig }) {
     return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 });
   }, [yard, g]);
 
-  const zoneOverlays = useMemo(
+  // Storage areas: floor-marking outlines, on the ground or on the raised platform.
+  const storageDecals = useMemo(
     () =>
-      yard.zones
-        .filter((z) => z.grid)
-        .map((z) => {
-          const tex = canvasTexture(`zone|${yard.id}|${z.id}`, z.rect.w * ZONE_PPM, z.rect.h * ZONE_PPM, (ctx) => paintZone(ctx, z, zonePositions(z)));
-          tex.anisotropy = 16;
-          const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-          return { zone: z, material: m };
-        }),
+      yard.storage.map((a) => {
+        const rect = storageDecalRect(a);
+        const tex = canvasTexture(`storage|${yard.id}|${a.id}`, Math.round(rect.w * AREA_PPM), Math.round(rect.h * AREA_PPM), (ctx) => paintStorageArea(ctx, a));
+        tex.anisotropy = 16;
+        const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+        return { area: a, rect, material: m };
+      }),
     [yard],
   );
 
@@ -78,8 +108,8 @@ export function Ground({ yard }: { yard: YardConfig }) {
         .filter((a) => a.elevation)
         .map((area) => {
           const r = area.rect;
-          const tex = canvasTexture(`area|${yard.id}|${area.id}`, r.w * ZONE_PPM, r.h * ZONE_PPM, (ctx) =>
-            paintArea(makePainter(ctx, r.x, r.y + r.h, ZONE_PPM), area),
+          const tex = canvasTexture(`area|${yard.id}|${area.id}`, r.w * AREA_PPM, r.h * AREA_PPM, (ctx) =>
+            paintArea(makePainter(ctx, r.x, r.y + r.h, AREA_PPM), area),
           );
           const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
           return { area, material: m };
@@ -95,9 +125,10 @@ export function Ground({ yard }: { yard: YardConfig }) {
       </mesh>
 
       <FloorPlane rect={{ x: g.x0, y: g.y0, w: g.x1 - g.x0, h: g.y1 - g.y0 }} h={0} material={groundMat} />
-      {zoneOverlays.map(({ zone, material }) => (
-        <FloorPlane key={zone.id} rect={zone.rect} h={(zone.elevation ?? 0) + 0.012} material={material} />
+      {storageDecals.map(({ area, rect, material }) => (
+        <FloorPlane key={area.id} rect={rect} h={(area.elevation ?? 0) + 0.012} material={material} />
       ))}
+      <GridLayer yard={yard} />
       {raisedAreas.map(({ area, material }) => (
         <FloorPlane key={area.id} rect={area.rect} h={(area.elevation ?? 0) + 0.014} material={material} />
       ))}

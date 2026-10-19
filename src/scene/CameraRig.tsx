@@ -6,7 +6,9 @@ import { useUi } from '../state/ui';
 import { useView } from '../state/view';
 import { devYard } from '../config/devYard';
 import { yardBounds } from '../domain/yard';
+import { cancelPlacing, startMove, toggleHold } from '../ui/actions';
 import { focusEntity } from '../ui/focus';
+import { useLayers } from '../state/layers';
 import { yardToWorld } from './kit';
 import { entityObject } from './registry';
 
@@ -16,6 +18,9 @@ export const YARD_CENTER: [number, number, number] = [yb.cx, 0, -yb.cy + 2];
 export const HOME_POSITION: [number, number, number] = [YARD_CENTER[0] + span * 0.62, span * 0.98, YARD_CENTER[2] + span * 1.12];
 export const MIN_DISTANCE = 8;
 export const MAX_DISTANCE = 260;
+
+/** Where the camera looks (yard coords) and from which side; read by the minimap. */
+export const cameraView = { x: yb.cx, y: yb.cy, yaw: 0, distance: 0 };
 
 interface ControlsLike {
   target: THREE.Vector3;
@@ -73,6 +78,12 @@ export function CameraRig() {
         useView.getState().setFollow(null);
         fly(new THREE.Vector3(...HOME_POSITION), new THREE.Vector3(...YARD_CENTER), 1.1);
         break;
+      case 'top': {
+        useView.getState().setFollow(null);
+        const c = new THREE.Vector3(yb.cx, 0, -yb.cy);
+        fly(c.clone().add(new THREE.Vector3(0, span * 2.1, 0.8)), c, 1.1);
+        break;
+      }
       case 'focus': {
         const obj = command.ref ? entityObject(command.ref) : undefined;
         const p = obj ? obj.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(...yardToWorld(command.x, command.y, command.h ?? 0));
@@ -92,23 +103,56 @@ export function CameraRig() {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      const ui = useUi.getState();
+      if (ui.dialog) return;
       const k = e.key.toLowerCase();
       keys.current.add(k);
       const view = useView.getState();
       const sim = useSim.getState();
+      const sel = ui.selected;
       switch (k) {
+        case 't':
+          view.send({ kind: 'top' });
+          break;
+        case 'c':
+          ui.openDialog({ kind: 'cargo' });
+          keys.current.clear();
+          break;
+        case 'm':
+          if (sel?.kind === 'cargo') startMove(sel.id);
+          break;
+        case 'r':
+          if (ui.placing) ui.rotatePlacing();
+          break;
+        case 'g':
+          if (sel?.kind === 'truck' || sel?.kind === 'forklift') toggleHold(sel.id);
+          break;
+        case 'l':
+          view.toggleLayers();
+          break;
+        case 'o':
+          useLayers.getState().cycleOverlay();
+          break;
+        case 'n': {
+          const layers = useLayers.getState();
+          layers.set({ hour: layers.hour >= 19 || layers.hour < 6 ? 14.5 : 22, followClock: false });
+          break;
+        }
         case 'h':
           view.send({ kind: 'home' });
           break;
-        case 'f': {
-          const sel = useUi.getState().selected;
+        case 'f':
           if (sel) focusEntity(sel);
           break;
-        }
         case 'escape':
-          useUi.getState().select(null);
+          if (ui.placing) {
+            cancelPlacing();
+            break;
+          }
+          ui.select(null);
           view.setFollow(null);
           view.toggleHelp(false);
+          view.toggleLayers(false);
           break;
         case ' ':
           e.preventDefault();
@@ -154,6 +198,11 @@ export function CameraRig() {
       controls.target.lerpVectors(f.fromTarget, f.toTarget, e);
       if (u >= 1) flight.current = null;
     }
+
+    cameraView.x = controls.target.x;
+    cameraView.y = -controls.target.z;
+    cameraView.yaw = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+    cameraView.distance = camera.position.distanceTo(controls.target);
 
     const followed = follow ? entityObject(follow) : undefined;
     if (followed && !flight.current) {

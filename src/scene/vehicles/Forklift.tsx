@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { groundAt, type ForkliftSpec } from '../../config/fleet';
 import { FORKLIFT } from '../../domain/vehicles';
 import { clock } from '../../sim/clock';
+import { entityTime, isHeld } from '../../sim/control';
+import { useLayers } from '../../state/layers';
 import { compileRoute, evalRoute, newPose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
 import { Box, Cyl, mat, palette, RBox, unitSphere, Wheel, yardToWorld } from '../kit';
@@ -101,6 +103,7 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
   const route = useMemo(() => (spec.route ? compileRoute(spec.route) : null), [spec.route]);
   const pose = useMemo(newPose, []);
   const highlight = useHighlight('forklift', spec.id);
+  const tags = useLayers((s) => s.tags);
   const hover = useUi((s) => s.hover);
   const unhover = useUi((s) => s.unhover);
   const select = useUi((s) => s.select);
@@ -114,7 +117,7 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
   useFrame(() => {
     if (!root.current || !carriage.current || !loadRef.current) return;
     if (route) {
-      evalRoute(route, clock.t, pose);
+      evalRoute(route, entityTime(spec.id, clock.t), pose);
       root.current.position.set(...yardToWorld(pose.x, pose.y, groundAt(pose.x, pose.y)));
       root.current.rotation.y = pose.heading;
       // Pitch with the floor (ramp): compare floor height ahead and behind.
@@ -124,11 +127,12 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
       const behind = groundAt(pose.x - c * 0.8, pose.y - sn * 0.8);
       root.current.rotation.z = Math.atan2(ahead - behind, 1.6);
       for (const w of wheels.current) w.rotation.z = -pose.odometer / (w.userData.radius as number);
-      if (statusRef.current && statusRef.current.textContent !== pose.status) statusRef.current.textContent = pose.status;
+      const status = isHeld(spec.id) ? `On hold · ${pose.status}` : pose.status;
+      if (statusRef.current && statusRef.current.textContent !== status) statusRef.current.textContent = status;
     }
     carriage.current.position.y = route ? pose.fork : 0.12;
     loadRef.current.visible = route ? pose.carry : false;
-    if (beacon.current) beacon.current.emissiveIntensity = route ? 0.4 + 0.8 * Math.max(0, Math.sin(clock.t * 7)) : 0.15;
+    if (beacon.current) beacon.current.emissiveIntensity = route && !isHeld(spec.id) ? 0.4 + 0.8 * Math.max(0, Math.sin(clock.t * 7)) : 0.15;
   });
 
   const p = spec.pose ?? { x: 0, y: 0, heading: 0 };
@@ -166,9 +170,9 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
         }
         />
       </Merge>
-      {highlight && (
+      {(highlight || tags) && (
         <group position={[0.2, 0, 0]}>
-          <Brackets size={[3.6, 2.5, 1.5]} strong={highlight === 'selected'} />
+          {highlight && <Brackets size={[3.6, 2.5, 1.5]} strong={highlight === 'selected'} />}
           <Tag y={3.4} title={spec.id} subtitle={spec.status || spec.model} statusRef={statusRef} />
         </group>
       )}

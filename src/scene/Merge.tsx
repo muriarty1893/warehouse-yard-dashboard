@@ -4,6 +4,32 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 const noop = () => {};
 
+/** Shared vertex-colour materials, one per surface finish. */
+const vcMaterials = new Map<string, THREE.MeshStandardMaterial>();
+function vcMaterial(roughness: number, metalness: number) {
+  const key = `${roughness.toFixed(2)}|${metalness.toFixed(2)}`;
+  let m = vcMaterials.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness });
+    vcMaterials.set(key, m);
+  }
+  return m;
+}
+
+/** Plain, opaque, non-glowing colour: can share a vertex-coloured material with others. */
+function isPlain(m: THREE.Material): m is THREE.MeshStandardMaterial {
+  const s = m as THREE.MeshStandardMaterial;
+  return (
+    s.isMeshStandardMaterial === true &&
+    !s.map &&
+    !s.emissiveMap &&
+    !s.transparent &&
+    s.side === THREE.FrontSide &&
+    s.emissive.r + s.emissive.g + s.emissive.b === 0 &&
+    !s.vertexColors
+  );
+}
+
 /**
  * Bakes the static meshes under it into one mesh per material, so a truck or
  * a building costs a handful of draw calls instead of dozens. Subtrees marked
@@ -25,10 +51,23 @@ export function Merge({ children, deps = [] }: { children: ReactNode; deps?: Dep
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh && !(obj as THREE.InstancedMesh).isInstancedMesh && !Array.isArray(mesh.material) && mesh.visible) {
         const g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
-        for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
+        const plain = isPlain(mesh.material);
+        const keep = plain ? ['position', 'normal'] : ['position', 'normal', 'uv'];
+        for (const name of Object.keys(g.attributes)) if (!keep.includes(name)) g.deleteAttribute(name);
         g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld));
-        const key = `${mesh.material.uuid}|${mesh.castShadow}`;
-        const bucket = buckets.get(key) ?? { material: mesh.material, cast: mesh.castShadow, geos: [] };
+        let material = mesh.material;
+        let key = `${mesh.material.uuid}|${mesh.castShadow}`;
+        if (plain) {
+          // Bake the colour into the vertices; everything with the same finish shares one draw call.
+          const src = mesh.material as THREE.MeshStandardMaterial;
+          const n = g.attributes.position.count;
+          const colors = new Float32Array(n * 3);
+          for (let i = 0; i < n; i++) colors.set([src.color.r, src.color.g, src.color.b], i * 3);
+          g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+          material = vcMaterial(src.roughness, src.metalness);
+          key = `${material.uuid}|${mesh.castShadow}`;
+        }
+        const bucket = buckets.get(key) ?? { material, cast: mesh.castShadow, geos: [] };
         bucket.geos.push(g);
         buckets.set(key, bucket);
         hidden.push(mesh);

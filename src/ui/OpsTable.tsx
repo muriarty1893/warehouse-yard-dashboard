@@ -1,13 +1,17 @@
-import { ChevronRight } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { ChevronRight, Download, FilePlus2 } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { useUi } from '../state/ui';
+import { useInventory } from '../world/inventory';
+import { locationOf } from '../world/placement';
 import { yard } from '../world/snapshot';
+import { DOC_SHORT, docStatusTone, documentsCsv, download } from './documents';
 import { fmtDuration } from '../world/time';
 import { useWorld } from '../world/store';
 import { focusPoint, selectAndFocus } from './focus';
 import { Bar, Card, Pill } from './kit';
 import { BAY_STATUS, CARRIER_COLORS, FORKLIFT_STATUS, TRUCK_STATUS, batteryTone } from './status';
 
-type Tab = 'docks' | 'forklifts' | 'trucks';
+type Tab = 'docks' | 'forklifts' | 'trucks' | 'cargo' | 'docs';
 
 function TableRow({ head, sub, middle, status, right, onClick }: { head: string; sub: string; middle: ReactNode; status: ReactNode; right: ReactNode; onClick: () => void }) {
   return (
@@ -41,14 +45,30 @@ export function OpsTable() {
   const forklifts = useWorld((s) => s.forklifts);
   const trucks = useWorld((s) => s.trucks);
   const k = useWorld((s) => s.kpis);
-  const docks = bays.filter((b) => b.kind !== 'staging');
+  const docks = bays.filter((b) => b.kind === 'loading' || b.kind === 'dock');
+  const cargo = useInventory((s) => s.cargo);
+  const documents = useInventory((s) => s.documents);
+  const openDialog = useUi((s) => s.openDialog);
+  const [missingOnly, setMissingOnly] = useState(false);
+  const docByCargo = useMemo(() => {
+    const m = new Map<string, typeof documents>();
+    for (const d of documents) m.set(d.cargoId, [...(m.get(d.cargoId) ?? []), d]);
+    return m;
+  }, [documents]);
+  const cargoRows = useMemo(
+    () => cargo.filter((c) => !missingOnly || !docByCargo.get(c.id)?.some((d) => d.status === 'confirmed')).sort((a, b) => a.id.localeCompare(b.id)),
+    [cargo, docByCargo, missingOnly],
+  );
+  const docRows = useMemo(() => [...documents].sort((a, b) => b.updatedAt - a.updatedAt), [documents]);
   const tabs: { id: Tab; label: string; count: string }[] = [
     { id: 'docks', label: 'Bays', count: `${k.docksBusy}/${k.docksTotal}` },
     { id: 'forklifts', label: 'Forklifts', count: `${k.forkliftsWorking}/${k.forkliftsTotal}` },
     { id: 'trucks', label: 'Trucks', count: String(trucks.length) },
+    { id: 'cargo', label: 'Cargo', count: String(cargo.length) },
+    { id: 'docs', label: 'Docs', count: String(documents.length) },
   ];
   return (
-    <Card className="w-[430px] p-3">
+    <Card className="w-[480px] p-3">
       <div className="mb-1.5 flex items-center justify-between">
         <div className="flex gap-0.5 rounded-xl bg-[#f0f3f8] p-0.5">
           {tabs.map((t) => (
@@ -56,13 +76,33 @@ export function OpsTable() {
               type="button"
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`rounded-[10px] px-2.5 py-1 text-[12px] font-semibold ${tab === t.id ? 'bg-white text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+              className={`rounded-[10px] px-1.5 py-1 text-[12px] font-semibold whitespace-nowrap ${tab === t.id ? 'bg-white text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
             >
               {t.label} <span className="text-faint">{t.count}</span>
             </button>
           ))}
         </div>
-        <span className="text-[11.5px] font-medium text-muted">{yard.name}</span>
+        {tab === 'cargo' ? (
+          <button type="button" onClick={() => setMissingOnly((v) => !v)} className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${missingOnly ? 'bg-[#fdecec] text-[#d64545]' : 'text-muted hover:bg-[#f0f3f8]'}`}>
+            {missingOnly ? 'Missing paperwork' : 'All units'}
+          </button>
+        ) : tab === 'docs' ? (
+          <span className="flex">
+            <button type="button" title="Export documents as CSV" onClick={() => download('docktor-documents.csv', documentsCsv(documents), 'text/csv')} className="flex items-center gap-0.5 rounded-lg px-1 py-1 text-[10.5px] font-semibold text-brand hover:bg-[#eef3ff]">
+              <Download size={12} /> CSV
+            </button>
+            <button
+              type="button"
+              title="Export cargo + documents as JSON"
+              onClick={() => download('docktor-inventory.json', JSON.stringify({ cargo, documents: documents.map(({ photo, ...d }) => ({ ...d, hasPhoto: !!photo })) }, null, 2), 'application/json')}
+              className="flex items-center gap-0.5 rounded-lg px-1 py-1 text-[10.5px] font-semibold text-brand hover:bg-[#eef3ff]"
+            >
+              <Download size={12} /> JSON
+            </button>
+          </span>
+        ) : (
+          <span className="text-[11.5px] font-medium text-muted">{yard.name}</span>
+        )}
       </div>
       <div className="max-h-[172px] overflow-y-auto pr-1">
         {tab === 'docks' &&
@@ -126,6 +166,66 @@ export function OpsTable() {
                 status={<Pill tone={st.tone}>{st.label}</Pill>}
                 right={t.progress ? <Progress {...t.progress} /> : t.etaSec !== null ? fmtDuration(t.etaSec) : ''}
                 onClick={() => selectAndFocus({ kind: 'truck', id: t.id })}
+              />
+            );
+          })}
+        {tab === 'cargo' &&
+          cargoRows.map((c) => {
+            const docs = docByCargo.get(c.id) ?? [];
+            const ok = docs.some((d) => d.status === 'confirmed');
+            return (
+              <TableRow
+                key={c.id}
+                head={c.id.replace('CARGO-', '#')}
+                sub={c.destination}
+                middle={
+                  <span className="block leading-tight">
+                    <span className="block truncate">{c.description}</span>
+                    <span className="block truncate text-[10.5px] text-faint">{locationOf(c)}</span>
+                  </span>
+                }
+                status={<Pill tone={!docs.length ? 'red' : ok ? 'green' : 'amber'}>{!docs.length ? 'No doc' : ok ? DOC_SHORT[docs[0].type] : 'Draft'}</Pill>}
+                right={
+                  !docs.length ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      title="Add the source document"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDialog({ kind: 'document', cargoId: c.id });
+                      }}
+                      className="flex items-center gap-1 font-semibold text-brand"
+                    >
+                      <FilePlus2 size={12} /> Add
+                    </span>
+                  ) : (
+                    `${c.weightKg} kg`
+                  )
+                }
+                onClick={() => selectAndFocus({ kind: 'cargo', id: c.id })}
+              />
+            );
+          })}
+        {tab === 'docs' &&
+          docRows.map((d) => {
+            const inYard = cargo.some((c) => c.id === d.cargoId);
+            return (
+              <TableRow
+                key={d.id}
+                head={DOC_SHORT[d.type]}
+                sub={d.issuedOn.slice(5)}
+                middle={
+                  <span className="block leading-tight">
+                    <span className="block truncate font-semibold">{d.number}</span>
+                    <span className="block truncate text-[10.5px] text-faint">
+                      {d.cargoId} · {d.shipper || '—'}
+                    </span>
+                  </span>
+                }
+                status={<Pill tone={inYard ? docStatusTone(d) : 'gray'}>{!inYard ? 'Released' : d.status === 'confirmed' ? 'Confirmed' : 'Draft'}</Pill>}
+                right={d.source === 'manual' ? 'by hand' : ''}
+                onClick={() => (inYard ? selectAndFocus({ kind: 'cargo', id: d.cargoId }) : openDialog({ kind: 'document', cargoId: d.cargoId, docId: d.id }))}
               />
             );
           })}

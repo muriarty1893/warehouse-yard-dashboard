@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { Merge as MergeLazy } from './Merge';
 
 /**
  * Shared look & building blocks: palette, cached materials/geometries and a
@@ -66,6 +67,63 @@ export function mat(color: string, opts: MatOpts = {}): THREE.MeshStandardMateri
 }
 
 export const glassMat = () => mat(palette.glass, { roughness: 0.18, metalness: 0.35 });
+
+// ---------------------------------------------------------------------------
+// Night lighting: materials that glow after dark, and light pools on the floor.
+// <Lighting /> scales them with the time of day.
+
+export interface Glow {
+  material: THREE.MeshStandardMaterial;
+  day: number;
+  night: number;
+}
+
+export const glows = new Set<Glow>();
+const glowCache = new Map<string, THREE.MeshStandardMaterial>();
+
+/** Emissive material whose glow goes from `day` to `night` intensity after sunset. */
+export function glowMat(color: string, emissive: string, day: number, night: number, opts: MatOpts = {}): THREE.MeshStandardMaterial {
+  const key = `${color}|${emissive}|${day}|${night}|${JSON.stringify(opts)}`;
+  let m = glowCache.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: day, roughness: opts.roughness ?? 0.5, metalness: opts.metalness ?? 0 });
+    glowCache.set(key, m);
+    glows.add({ material: m, day, night });
+  }
+  return m;
+}
+
+/** Register an existing material (e.g. a lit-windows texture) for the night glow. */
+export function registerGlow(material: THREE.MeshStandardMaterial, day: number, night: number) {
+  glows.add({ material, day, night });
+}
+
+function radialTexture() {
+  return canvasTexture('light-pool', 128, 128, (ctx, w, h) => {
+    const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255, 236, 190, 1)');
+    g.addColorStop(0.35, 'rgba(255, 226, 170, 0.55)');
+    g.addColorStop(1, 'rgba(255, 220, 160, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+
+let pool: THREE.MeshBasicMaterial | null = null;
+/** Additive warm light pool, faded in at night by <Lighting />. */
+export function poolMaterial() {
+  pool ??= new THREE.MeshBasicMaterial({ map: radialTexture(), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  return pool;
+}
+
+/** Floor light pool under a lamp. */
+export function LightPool({ x, y, h = 0, r }: { x: number; y: number; h?: number; r: number }) {
+  return (
+    <mesh position={yardToWorld(x, y, h + 0.04)} rotation={[-Math.PI / 2, 0, 0]} material={poolMaterial()} renderOrder={2}>
+      <planeGeometry args={[r * 2, r * 2]} />
+    </mesh>
+  );
+}
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
 
@@ -137,12 +195,25 @@ export function Cyl({
   );
 }
 
+const tyreMat = () => mat(palette.tire, { roughness: 0.9 });
+const hubMat = () => mat('#c3cad8', { roughness: 0.9 });
+
+function WheelParts({ r, w, live }: { r: number; w: number; live: boolean }) {
+  const parts = (
+    <>
+      <mesh geometry={unitCylinder} material={tyreMat()} rotation={[Math.PI / 2, 0, 0]} scale={[r, w, r]} castShadow />
+      <mesh geometry={unitCylinder} material={hubMat()} rotation={[Math.PI / 2, 0, 0]} scale={[r * 0.55, w * 1.04, r * 0.55]} castShadow />
+    </>
+  );
+  // A rolling wheel stays live, but its tyre and hub still bake into one mesh.
+  return live ? <MergeLazy>{parts}</MergeLazy> : parts;
+}
+
 /** Wheel lying along z (rolls about z when the vehicle moves along x). `spin` registers it for rolling. */
 export function Wheel({ r, w, position, spin }: { r: number; w: number; position: V3; spin?: (g: THREE.Group | null) => void }) {
   return (
     <group position={position} ref={spin} userData={{ radius: r, noMerge: !!spin }}>
-      <mesh geometry={unitCylinder} material={mat(palette.tire, { roughness: 0.9 })} rotation={[Math.PI / 2, 0, 0]} scale={[r, w, r]} castShadow />
-      <mesh geometry={unitCylinder} material={mat('#c3cad8', { roughness: 0.4, metalness: 0.3 })} rotation={[Math.PI / 2, 0, 0]} scale={[r * 0.55, w * 1.04, r * 0.55]} />
+      <WheelParts r={r} w={w} live={!!spin} />
     </group>
   );
 }

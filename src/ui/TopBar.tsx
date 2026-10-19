@@ -1,9 +1,16 @@
-import { Bell, Box, ChevronDown, ChevronRight, Forklift, MapPin, Pause, Play, Search, Truck, User, TriangleAlert, Info } from 'lucide-react';
+import { Bell, Box, ChevronDown, ChevronRight, FileText, Forklift, Info, MapPin, OctagonX, Pause, Play, Plus, Search, TriangleAlert, Truck, User } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { polygonBounds } from '../domain/geometry';
 import { SPEEDS, useSim } from '../sim/clock';
-import type { EntityRef } from '../state/ui';
-import { cargo, positions, yard } from '../world/snapshot';
+import { useControl } from '../sim/control';
+import { useLayers } from '../state/layers';
+import { useUi, type EntityRef } from '../state/ui';
+import { useInventory } from '../world/inventory';
+import { locationOf } from '../world/placement';
+import { yard } from '../world/snapshot';
 import { useWorld } from '../world/store';
+import { toggleStopAll } from './actions';
+import { docTypeLabel } from './documents';
 import { focusPoint, selectAndFocus } from './focus';
 import { Card, Kbd } from './kit';
 
@@ -24,7 +31,7 @@ export function Logo() {
 // ---------------------------------------------------------------------------
 // Search
 
-type HitKind = 'Truck' | 'Forklift' | 'Worker' | 'Cargo' | 'Position';
+type HitKind = 'Truck' | 'Forklift' | 'Worker' | 'Cargo' | 'Document' | 'Area';
 
 interface Hit {
   key: string;
@@ -40,27 +47,52 @@ const HIT_ICONS: Record<HitKind, ReactNode> = {
   Forklift: <Forklift size={15} />,
   Worker: <User size={15} />,
   Cargo: <Box size={15} />,
-  Position: <MapPin size={15} />,
+  Document: <FileText size={15} />,
+  Area: <MapPin size={15} />,
 };
 
 /** Everything searchable, built on demand from the current World State. */
 function searchIndex(): Hit[] {
   const { trucks, forklifts, workers } = useWorld.getState();
+  const { cargo, documents } = useInventory.getState();
   const go = (ref: EntityRef) => () => selectAndFocus(ref);
   return [
     ...trucks.map((t) => ({ key: t.id, kind: 'Truck' as const, title: t.id, subtitle: `${t.carrier} · ${t.plate} · ${t.where}`, text: `${t.id} ${t.carrier} ${t.plate} ${t.driver} ${t.shipment.id}`, pick: go({ kind: 'truck', id: t.id }) })),
     ...forklifts.map((f) => ({ key: f.id, kind: 'Forklift' as const, title: f.id, subtitle: `${f.operator} · ${f.model}`, text: `${f.id} ${f.operator} ${f.model}`, pick: go({ kind: 'forklift', id: f.id }) })),
     ...workers.map((w) => ({ key: w.id, kind: 'Worker' as const, title: w.name, subtitle: `${w.id} · ${w.role}`, text: `${w.id} ${w.name} ${w.role}`, pick: go({ kind: 'worker', id: w.id }) })),
-    ...cargo.map((c) => ({ key: c.id, kind: 'Cargo' as const, title: c.id, subtitle: `${c.description} · ${c.positionId}`, text: `${c.id} ${c.description} ${c.destination} ${c.type}`, pick: go({ kind: 'cargo', id: c.id }) })),
-    ...[...positions.values()].map((p) => {
-      const top = cargo.filter((c) => c.positionId === p.id).sort((a, b) => b.stackLevel - a.stackLevel)[0];
+    ...cargo.map((c) => {
+      const docs = documents.filter((d) => d.cargoId === c.id);
       return {
-        key: `pos-${p.id}`,
-        kind: 'Position' as const,
-        title: p.id,
-        subtitle: top ? `Position · ${top.id}` : 'Position · empty',
-        text: p.id,
-        pick: top ? go({ kind: 'cargo', id: top.id }) : () => focusPoint(p.x, p.y, 24),
+        key: c.id,
+        kind: 'Cargo' as const,
+        title: c.id,
+        subtitle: `${c.description} · ${locationOf(c)}`,
+        text: `${c.id} ${c.description} ${c.destination} ${c.type} ${docs.map((d) => `${d.number} ${d.shipper} ${d.consignee}`).join(' ')}`,
+        pick: go({ kind: 'cargo', id: c.id }),
+      };
+    }),
+    ...documents
+      .filter((d) => cargo.some((c) => c.id === d.cargoId))
+      .map((d) => ({
+        key: d.id,
+        kind: 'Document' as const,
+        title: d.number,
+        subtitle: `${docTypeLabel(d.type)} · ${d.cargoId} · ${d.shipper || '—'}`,
+        text: `${d.number} ${d.shipper} ${d.consignee} ${d.carrier ?? ''} ${d.items ?? ''}`,
+        pick: go({ kind: 'cargo', id: d.cargoId }),
+      })),
+    ...yard.storage.map((a) => {
+      const b = polygonBounds(a.parts);
+      return {
+        key: `area-${a.id}`,
+        kind: 'Area' as const,
+        title: a.name,
+        subtitle: a.description ?? 'Storage space',
+        text: `${a.name} ${a.description ?? ''}`,
+        pick: () => {
+          useLayers.getState().set({ overlay: 'areas' });
+          focusPoint(b.x + b.w / 2, b.y + b.h / 2, Math.max(28, Math.max(b.w, b.h) * 1.5));
+        },
       };
     }),
   ];
@@ -75,10 +107,17 @@ function SearchBox() {
   const hits = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const index = searchIndex();
-    const exact = index.filter((h) => h.title.toLowerCase() === q);
-    const rest = index.filter((h) => h.title.toLowerCase() !== q && h.text.toLowerCase().includes(q));
-    return [...exact, ...rest].slice(0, 8);
+    // Exact title, then titles starting with the query (IDs, bill numbers), then anywhere in the text.
+    const rank = (h: Hit) => {
+      const t = h.title.toLowerCase();
+      return t === q ? 0 : t.startsWith(q) ? 1 : t.includes(q) ? 2 : h.text.toLowerCase().includes(q) ? 3 : 9;
+    };
+    return searchIndex()
+      .map((h) => ({ h, r: rank(h) }))
+      .filter((x) => x.r < 9)
+      .sort((a, b) => a.r - b.r)
+      .slice(0, 8)
+      .map((x) => x.h);
   }, [query]);
 
   useEffect(() => {
@@ -129,7 +168,7 @@ function SearchBox() {
               input.current?.blur();
             }
           }}
-          placeholder="Search trucks, forklifts, cargo, positions…"
+          placeholder="Search cargo, bill numbers, trucks…"
           className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-faint"
           aria-label="Search the yard"
         />
@@ -165,12 +204,12 @@ function SearchBox() {
 function YardChip() {
   const kpis = useWorld((s) => s.kpis);
   return (
-    <div className="pointer-events-auto hidden h-11 items-center gap-2.5 rounded-xl border border-line bg-white py-1 pr-2 pl-1.5 shadow-[0_2px_8px_rgba(27,42,74,0.04)] lg:flex">
+    <div className="pointer-events-auto hidden h-11 items-center gap-2.5 rounded-xl border border-line bg-white py-1 pr-2 pl-1.5 whitespace-nowrap shadow-[0_2px_8px_rgba(27,42,74,0.04)] min-[1800px]:flex">
       <span className="rounded-lg bg-brand px-1.5 py-1 text-[11px] font-bold text-white">{yard.id}</span>
       <span className="leading-tight">
         <span className="block text-[13px] font-semibold text-ink">{yard.name}</span>
         <span className="block text-[11px] text-muted">
-          {Math.round(kpis.storagePct)}% used · {kpis.docksBusy}/{kpis.docksTotal} bays busy
+          {Math.round(kpis.storagePct)}% full · {kpis.docksBusy}/{kpis.docksTotal} bays busy
         </span>
       </span>
       <ChevronRight size={16} className="text-faint" />
@@ -203,7 +242,7 @@ function TimeControls() {
           {s}×
         </button>
       ))}
-      <span className={`ml-1 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-semibold ${paused ? 'bg-[#eef1f6] text-muted' : 'bg-[#e5f6ec] text-[#1f9254]'}`} title="Simulated yard time">
+      <span className={`ml-1 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-semibold whitespace-nowrap ${paused ? 'bg-[#eef1f6] text-muted' : 'bg-[#e5f6ec] text-[#1f9254]'}`} title="Simulated yard time">
         <span className={`h-2 w-2 rounded-full ${paused ? 'bg-faint' : 'animate-pulse bg-[#22b35e]'}`} />
         Sim {clock}
       </span>
@@ -226,14 +265,23 @@ function Alerts() {
         {alerts.length > 0 && <span className="absolute top-2 right-2.5 h-2 w-2 rounded-full bg-[#e05252] ring-2 ring-white" />}
       </button>
       {open && (
-        <Card className="absolute top-12 right-0 z-30 w-80 p-2">
+        <Card className="absolute top-12 right-0 z-30 max-h-[70vh] w-80 overflow-y-auto p-2">
           <div className="px-2 py-1.5 text-[12px] font-semibold text-ink">Alerts · {alerts.length}</div>
           {alerts.length === 0 && <div className="px-2 py-3 text-[12px] text-muted">All clear.</div>}
           {alerts.map((a) => (
-            <div key={a.id} className="flex items-start gap-2.5 rounded-lg px-2 py-2 hover:bg-[#f5f7fb]">
+            <button
+              type="button"
+              key={a.id}
+              onClick={() => {
+                if (a.ref) selectAndFocus(a.ref);
+                if (a.overlay) useLayers.getState().set({ overlay: a.overlay });
+                setOpen(false);
+              }}
+              className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-[#f5f7fb]"
+            >
               {a.level === 'warn' ? <TriangleAlert size={15} className="mt-0.5 shrink-0 text-[#f0932b]" /> : <Info size={15} className="mt-0.5 shrink-0 text-brand" />}
               <span className="text-[12px] text-ink">{a.text}</span>
-            </div>
+            </button>
           ))}
         </Card>
       )}
@@ -254,13 +302,45 @@ function UserChip() {
   );
 }
 
+function RegisterButton() {
+  const openDialog = useUi((s) => s.openDialog);
+  return (
+    <button
+      type="button"
+      onClick={() => openDialog({ kind: 'cargo' })}
+      title="Register cargo from a bill / delivery note (C)"
+      className="pointer-events-auto flex h-10 items-center gap-1.5 rounded-xl bg-brand px-3.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(47,95,240,0.35)] hover:bg-[#2552d8]"
+    >
+      <Plus size={16} strokeWidth={2.6} />
+      <span className="hidden sm:inline">Register cargo</span>
+    </button>
+  );
+}
+
+function StopAll() {
+  const held = useControl((s) => Object.keys(s.holds).length);
+  return (
+    <button
+      type="button"
+      onClick={toggleStopAll}
+      title={held ? 'Resume all vehicles' : 'Emergency stop: hold every moving vehicle'}
+      className={`pointer-events-auto flex h-11 items-center gap-1.5 rounded-xl border px-3 text-[12.5px] font-semibold shadow-[0_2px_8px_rgba(27,42,74,0.04)] ${held ? 'border-[#e05252] bg-[#e05252] text-white' : 'border-line bg-white text-[#d64545] hover:bg-[#fdecec]'}`}
+    >
+      {held ? <Play size={15} fill="currentColor" /> : <OctagonX size={16} />}
+      <span className="hidden 2xl:inline">{held ? `Resume (${held} held)` : 'Stop all'}</span>
+    </button>
+  );
+}
+
 export function TopBar() {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-16 items-center gap-4 bg-gradient-to-b from-white/90 to-white/50 px-4">
       <Logo />
       <SearchBox />
+      <RegisterButton />
       <div className="flex-1" />
       <YardChip />
+      <StopAll />
       <TimeControls />
       <Alerts />
       <UserChip />

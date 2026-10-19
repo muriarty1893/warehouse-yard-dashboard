@@ -1,14 +1,18 @@
 import { Environment, Lightformer, MapControls } from '@react-three/drei';
 import { EffectComposer, N8AO, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
-import { Suspense, useLayoutEffect, useRef } from 'react';
-import * as THREE from 'three';
+import { Suspense } from 'react';
 import { devYard } from '../config/devYard';
 import { forklifts, trucks, workers } from '../config/fleet';
 import { settings } from '../settings';
 import { SimClock } from '../sim/clock';
-import { cargo, positions } from '../world/snapshot';
+import { useLayers } from '../state/layers';
 import { CargoLayer } from './cargo/CargoLayer';
+import { Overlays } from './cargo/Overlays';
+import { Placement } from './cargo/Placement';
+import { Lighting } from './Lighting';
+import { RouteLines } from './RouteLines';
+import { GateArea } from './site/Gate';
 import { CameraRig, MAX_DISTANCE, MIN_DISTANCE, YARD_CENTER } from './CameraRig';
 import { DevHooks } from './DevHooks';
 import { palette } from './kit';
@@ -22,39 +26,10 @@ import { Traffic } from './vehicles/Traffic';
 import { Truck } from './vehicles/Truck';
 import { Worker } from './vehicles/Worker';
 
-function Sun() {
-  const ref = useRef<THREE.DirectionalLight>(null);
-  useLayoutEffect(() => {
-    const light = ref.current;
-    if (!light) return;
-    light.target.position.set(...YARD_CENTER);
-    light.target.updateMatrixWorld();
-    const cam = light.shadow.camera;
-    cam.left = -75;
-    cam.right = 75;
-    cam.top = 70;
-    cam.bottom = -70;
-    cam.near = 20;
-    cam.far = 420;
-    cam.updateProjectionMatrix();
-  }, []);
-  return (
-    <directionalLight
-      ref={ref}
-      position={[YARD_CENTER[0] - 80, 170, YARD_CENTER[2] + 95]}
-      intensity={3.4}
-      color="#fffaf0"
-      castShadow={settings.shadowMap > 0}
-      shadow-mapSize={[settings.shadowMap, settings.shadowMap]}
-      shadow-bias={-0.0004}
-      shadow-normalBias={0.05}
-      shadow-radius={3}
-    />
-  );
-}
-
 export function YardScene() {
   const yard = devYard;
+  const nature = useLayers((s) => s.nature);
+  const traffic = useLayers((s) => s.traffic);
 
   return (
     <>
@@ -62,8 +37,7 @@ export function YardScene() {
       <color attach="background" args={[palette.background]} />
       <fog attach="fog" args={[palette.background, 300, 700]} />
 
-      <hemisphereLight args={['#ffffff', '#b9c2da', 0.9]} />
-      <Sun />
+      <Lighting />
       <Environment resolution={256} frames={1} environmentIntensity={0.12}>
         <Lightformer form="rect" intensity={2.5} position={[0, 20, 0]} rotation-x={Math.PI / 2} scale={[40, 40, 1]} />
         <Lightformer form="rect" intensity={1.2} position={[-30, 8, 20]} rotation-y={Math.PI / 3} scale={[30, 10, 1]} color="#dfe8ff" />
@@ -73,12 +47,16 @@ export function YardScene() {
       <Ground yard={yard} />
       <Suspense fallback={null}>
         <RoadTiles gateX={(yard.gates[0].a[0] + yard.gates[0].b[0]) / 2} />
-        <Nature />
+        {nature && <Nature />}
       </Suspense>
       <Scenery yard={yard} />
       <Buildings yard={yard} />
       <Props yard={yard} />
-      <CargoLayer cargo={cargo} positions={positions} />
+      <GateArea />
+      <CargoLayer />
+      <Overlays />
+      <Placement />
+      <RouteLines />
       {trucks.map((t) => (
         <Truck key={t.id} spec={t} />
       ))}
@@ -88,7 +66,7 @@ export function YardScene() {
       {workers.map((w) => (
         <Worker key={w.id} spec={w} />
       ))}
-      <Traffic />
+      {traffic && <Traffic />}
 
       <MapControls
         makeDefault

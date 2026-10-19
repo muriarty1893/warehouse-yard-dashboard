@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Layers, Package, Truck } from 'lucide-react';
+import { ArrowDown, ArrowUp, FileText, Layers, Package, Truck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useWorld } from '../world/store';
 import { Card, IconTile } from './kit';
@@ -31,7 +31,10 @@ export function KpiCards() {
     <div className="pointer-events-none absolute top-[76px] left-4 z-10 hidden gap-3 md:flex">
       <Kpi icon={<Package size={20} />} label="Cargo in yard" value={k.cargo.toLocaleString('en-US')} delta={{ text: signed(k.cargoDelta), up: k.cargoDelta >= 0 }} sub="units · YD-01" />
       <Kpi icon={<Truck size={20} />} label="Trucks on site" value={String(k.trucksOnSite)} delta={{ text: `+${k.arrivalsToday}`, up: true }} sub={`${k.inbound} inbound · YD-01`} />
-      <Kpi icon={<Layers size={20} />} label="Storage used" value={`${k.storagePct.toFixed(1)}%`} sub={`${k.positionsUsed} of ${k.positionsTotal} positions`} />
+      <Kpi icon={<Layers size={20} />} label="Storage used" value={`${k.storagePct.toFixed(0)}%`} sub={`${k.spotsUsed} of ${k.spotsTotal} spots`} />
+      <div className="hidden 2xl:block">
+        <Kpi icon={<FileText size={20} />} label="Missing paperwork" value={String(k.docsMissing)} sub={`${k.docsDraft} drafts · ${k.documents} documents`} />
+      </div>
     </div>
   );
 }

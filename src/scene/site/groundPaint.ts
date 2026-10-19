@@ -1,5 +1,9 @@
-import type { Area, Rect, StoragePosition, TruckBay, YardConfig, Zone } from '../../domain/types';
-import { yardBounds } from '../../domain/yard';
+import { forklifts, trucks } from '../../config/fleet';
+import { polygonBounds } from '../../domain/geometry';
+import { hashString, mulberry32 } from '../../domain/seed';
+import type { Area, Rect, StorageArea, TruckBay, YardConfig } from '../../domain/types';
+import { GRID, yardBounds } from '../../domain/yard';
+import { compileRoute, evalRoute, newPose } from '../../sim/route';
 import { palette, FONT } from '../kit';
 
 /**
@@ -191,11 +195,103 @@ function paintBay(p: Painter, bay: TruckBay) {
   const hl = bay.length / 2;
   const hw = bay.width / 2;
   const pt = (along: number, across: number): [number, number] => [cx + dx * along + nx * across, cy + dy * along + ny * across];
+  if (bay.kind === 'parking') {
+    // Painted box along the wall, with its number.
+    const { ctx } = p;
+    ctx.save();
+    ctx.strokeStyle = WHITE;
+    ctx.lineWidth = 0.14 * p.k;
+    ctx.beginPath();
+    [pt(-hl, -hw), pt(hl, -hw), pt(hl, hw), pt(-hl, hw)].forEach(([x, y], i) => (i ? ctx.lineTo(p.X(x), p.Y(y)) : ctx.moveTo(p.X(x), p.Y(y))));
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+    text(p, bay.id, cx - hl + 1.2, cy, 0.9, 'rgba(255,255,255,0.95)', { weight: 800 });
+    return;
+  }
   line(p, pt(-hl, -hw), pt(hl, -hw), 0.13, YELLOW);
   line(p, pt(-hl, hw), pt(hl, hw), 0.13, YELLOW);
   if (bay.kind !== 'dock') line(p, pt(-hl, -hw), pt(-hl, hw), 0.35, YELLOW);
   const [lx, ly] = pt(hl + 1.1, 0);
   text(p, bay.id, lx, ly, 0.85, '#8a94ad', { weight: 700 });
+}
+
+/** Worn concrete: slab joints, mottling, tyre tracks along the truck and forklift routes, oil drips. */
+function paintWear(p: Painter, yard: YardConfig) {
+  const { ctx } = p;
+  const b = yardBounds(yard);
+  const rng = mulberry32(hashString('concrete'));
+  ctx.save();
+  ctx.beginPath();
+  yard.boundary.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(p.X(x), p.Y(y)) : ctx.lineTo(p.X(x), p.Y(y))));
+  ctx.closePath();
+  ctx.clip();
+  // Mottling.
+  for (let i = 0; i < 2200; i++) {
+    const x = b.x0 + rng() * b.w;
+    const y = b.y0 + rng() * b.h;
+    const r = (0.4 + rng() * 2.2) * p.k;
+    const dark = rng() < 0.6;
+    const g = ctx.createRadialGradient(p.X(x), p.Y(y), 0, p.X(x), p.Y(y), r);
+    g.addColorStop(0, dark ? `rgba(120,130,152,${0.035 + rng() * 0.04})` : `rgba(255,255,255,${0.05 + rng() * 0.05})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(p.X(x) - r, p.Y(y) - r, r * 2, r * 2);
+  }
+  // Slab joints every 6 m.
+  ctx.strokeStyle = 'rgba(132,142,166,0.22)';
+  ctx.lineWidth = 0.045 * p.k;
+  for (let x = b.x0 + 6; x < b.x1; x += 6) {
+    ctx.beginPath();
+    ctx.moveTo(p.X(x), p.Y(b.y0));
+    ctx.lineTo(p.X(x), p.Y(b.y1));
+    ctx.stroke();
+  }
+  for (let y = b.y0 + 6; y < b.y1; y += 6) {
+    ctx.beginPath();
+    ctx.moveTo(p.X(b.x0), p.Y(y));
+    ctx.lineTo(p.X(b.x1), p.Y(y));
+    ctx.stroke();
+  }
+  // Tyre tracks: sample each route and stroke the wheel lines.
+  const tracks = (route: ReturnType<typeof compileRoute>, half: number, width: number, alpha: number) => {
+    const pose = newPose();
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      let pen = false;
+      for (let t = 0; t <= route.duration; t += 0.08) {
+        evalRoute(route, (route.spec.offset ?? 0) + t, pose);
+        const x = pose.x - Math.sin(pose.heading) * half * side;
+        const y = pose.y + Math.cos(pose.heading) * half * side;
+        if (x < b.x0 - 2 || x > b.x1 + 2 || y < b.y0 - 1 || y > b.y1) {
+          pen = false;
+          continue;
+        }
+        if (pen) ctx.lineTo(p.X(x), p.Y(y));
+        else ctx.moveTo(p.X(x), p.Y(y));
+        pen = true;
+      }
+      ctx.strokeStyle = `rgba(70,80,104,${alpha})`;
+      ctx.lineWidth = width * p.k;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  };
+  for (const tr of trucks) if (tr.route) tracks(compileRoute(tr.route), 0.95, 0.42, 0.085);
+  for (const f of forklifts) if (f.route) tracks(compileRoute(f.route), 0.45, 0.18, 0.06);
+  // Oil drips under where trucks stand with the engine running.
+  const drip = (x: number, y: number) => {
+    for (let i = 0; i < 4; i++) {
+      const r = (0.25 + rng() * 0.5) * p.k;
+      const g = ctx.createRadialGradient(p.X(x + (rng() - 0.5) * 1.2), p.Y(y + (rng() - 0.5) * 0.8), 0, p.X(x), p.Y(y), r * 1.6);
+      g.addColorStop(0, `rgba(40,46,62,${0.1 + rng() * 0.08})`);
+      g.addColorStop(1, 'rgba(40,46,62,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(p.X(x) - r * 2, p.Y(y) - r * 2, r * 4, r * 4);
+    }
+  };
+  for (const bay of yard.bays) drip(bay.center[0] + Math.cos(bay.heading) * 2.5, bay.center[1] + Math.sin(bay.heading) * 2.5);
+  ctx.restore();
 }
 
 export function paintGround(ctx: CanvasRenderingContext2D, yard: YardConfig) {
@@ -205,8 +301,9 @@ export function paintGround(ctx: CanvasRenderingContext2D, yard: YardConfig) {
   ctx.fillStyle = palette.ground;
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  // Driveway from the road to the gate.
+  // Driveway from the road to the entrance.
   for (const gate of yard.gates) {
+    if (gate.closed) continue;
     const x0 = Math.min(gate.a[0], gate.b[0]) - 2;
     const x1 = Math.max(gate.a[0], gate.b[0]) + 2;
     fillRect(p, { x: x0, y: g.y0, w: x1 - x0, h: -g.y0 + 0.5 }, palette.lane);
@@ -218,48 +315,81 @@ export function paintGround(ctx: CanvasRenderingContext2D, yard: YardConfig) {
   ctx.closePath();
   ctx.fillStyle = palette.yard;
   ctx.fill();
-  ctx.strokeStyle = '#d3d9e6';
-  ctx.lineWidth = 0.5 * p.k;
-  ctx.stroke();
-
-  // Zone floors.
-  for (const z of yard.zones) {
-    if (z.kind === 'storage' || z.kind === 'container') fillRect(p, z.rect, '#e8ecf6');
-  }
+  paintWear(p, yard);
 
   const ground = yard.areas.filter((a) => !a.elevation);
   for (const a of ground) if (a.kind !== 'crossing') paintArea(p, a);
   for (const a of ground) if (a.kind === 'crossing') paintArea(p, a);
   for (const b of yard.bays) paintBay(p, b);
 
-  for (const z of yard.zones) {
-    if (z.kind !== 'loading' && z.kind !== 'staging') continue;
-    strokeRect(p, z.rect, 0.14, 'rgba(47, 95, 240, 0.35)', [1.6, 1], 0.6);
-    text(p, z.name.toUpperCase(), z.rect.x + z.rect.w / 2, z.rect.y + z.rect.h - 1.6, 1.5, 'rgba(47, 95, 240, 0.55)', { spacing: 0.25 });
-  }
-
-  // Lane labels just inside each drive-through gate on the south edge.
+  // Entrance: lane arrows, IN / OUT, and the check-in stop line.
   for (const gate of yard.gates) {
     if (gate.closed || gate.a[1] !== gate.b[1]) continue;
     const mid = (gate.a[0] + gate.b[0]) / 2;
-    text(p, 'IN', mid + 4, gate.a[1] + 2.4, 1.3, WHITE, { spacing: 0.2 });
-    text(p, 'OUT', mid - 4, gate.a[1] + 2.4, 1.3, WHITE, { spacing: 0.2 });
+    arrow(p, mid + 4, gate.a[1] + 2.4, Math.PI / 2, 2.4, WHITE);
+    arrow(p, mid - 4, gate.a[1] + 2.4, -Math.PI / 2, 2.4, WHITE);
+    text(p, 'IN', mid + 4, gate.a[1] + 4.4, 1.1, WHITE, { spacing: 0.2 });
+    text(p, 'OUT', mid - 4, gate.a[1] + 4.4, 1.1, WHITE, { spacing: 0.2 });
+    line(p, [mid + 1.4, 13.6], [mid + 6.4, 13.6], 0.3, WHITE);
+    text(p, 'STOP · CHECK-IN', mid + 3.9, 14.5, 0.55, 'rgba(255,255,255,0.95)', { spacing: 0.06 });
+    line(p, [mid, gate.a[1] + 0.6], [mid, gate.a[1] + 9], 0.12, WHITE, [1.5, 1.2]);
   }
 }
 
-/** Zone overlay: slot outlines, slot IDs and the zone name, at higher resolution. */
-export const ZONE_PPM = 50;
+/** Storage-area decal: yellow floor-marking outline (dashed) and the area name. */
+export const AREA_PPM = 40;
 
-export function paintZone(ctx: CanvasRenderingContext2D, zone: Zone, slots: StoragePosition[]) {
-  const r = zone.rect;
-  const p = makePainter(ctx, r.x, r.y + r.h, ZONE_PPM);
-  strokeRect(p, { x: r.x + 0.1, y: r.y + 0.1, w: r.w - 0.2, h: r.h - 0.2 }, 0.1, `${zone.color}55`, [0.8, 0.5], 0.5);
-  text(p, zone.name.toUpperCase(), r.x + 0.9, r.y + r.h - 1.2, 1.1, zone.color, { align: 'left', spacing: 0.12, weight: 800 });
-
-  const idBelow = zone.kind === 'container';
-  for (const s of slots) {
-    strokeRect(p, { x: s.x - s.w / 2, y: s.y - s.d / 2, w: s.w, h: s.d }, 0.07, YELLOW, undefined, 0.08);
-    const below = idBelow || s.face === 'south';
-    text(p, s.id, s.x, below ? s.y - s.d / 2 - 0.42 : s.y + s.d / 2 + 0.42, 0.42, '#7d89a6', { weight: 700 });
-  }
+export function storageDecalRect(area: StorageArea): Rect {
+  const b = polygonBounds(area.parts);
+  return { x: b.x - 0.5, y: b.y - 0.5, w: b.w + 1, h: b.h + 1 };
 }
+
+export function paintStorageArea(ctx: CanvasRenderingContext2D, area: StorageArea) {
+  const r = storageDecalRect(area);
+  const p = makePainter(ctx, r.x, r.y + r.h, AREA_PPM);
+  const { ctx: c } = p;
+  for (const part of area.parts) {
+    c.save();
+    c.beginPath();
+    part.forEach(([x, y], i) => (i ? c.lineTo(p.X(x), p.Y(y)) : c.moveTo(p.X(x), p.Y(y))));
+    c.closePath();
+    c.fillStyle = 'rgba(245, 208, 0, 0.07)';
+    c.fill();
+    c.strokeStyle = 'rgba(232, 190, 20, 0.95)';
+    c.lineWidth = 0.12 * p.k;
+    c.setLineDash([0.9 * p.k, 0.55 * p.k]);
+    c.lineJoin = 'round';
+    c.stroke();
+    c.restore();
+  }
+  const main = area.parts[0];
+  // Label near the polygon's south-west corner, along its bottom edge.
+  const minY = Math.min(...main.map((q) => q[1]));
+  const bottom = main.filter((q) => q[1] < minY + 0.8);
+  const lx = Math.min(...bottom.map((q) => q[0])) + 0.6;
+  text(p, area.name.toUpperCase(), lx, minY + 0.65, 0.62, '#c9a227', { align: 'left', spacing: 0.08, weight: 800 });
+}
+
+/** Reference grid (5 m) with A1-style labels, for reading out free-form locations. */
+export function paintGrid(ctx: CanvasRenderingContext2D, yard: YardConfig, ppm: number) {
+  const b = yardBounds(yard);
+  const p = makePainter(ctx, b.x0, b.y1, ppm);
+  const { ctx: c } = p;
+  c.strokeStyle = 'rgba(47, 95, 240, 0.32)';
+  c.lineWidth = 0.06 * p.k;
+  for (let x = b.x0; x <= b.x1 + 0.01; x += GRID) {
+    c.beginPath();
+    c.moveTo(p.X(x), p.Y(b.y0));
+    c.lineTo(p.X(x), p.Y(b.y1));
+    c.stroke();
+  }
+  for (let y = b.y0; y <= b.y1 + 0.01; y += GRID) {
+    c.beginPath();
+    c.moveTo(p.X(b.x0), p.Y(y));
+    c.lineTo(p.X(b.x1), p.Y(y));
+    c.stroke();
+  }
+  for (let x = b.x0; x < b.x1; x += GRID)
+    for (let y = b.y0; y < b.y1; y += GRID) text(p, `${String.fromCharCode(65 + Math.round((x - b.x0) / GRID))}${Math.round((y - b.y0) / GRID) + 1}`, x + 0.9, y + 0.6, 0.55, 'rgba(47, 95, 240, 0.7)', { weight: 800 });
+}
+

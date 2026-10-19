@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { devYard } from '../../config/devYard';
 import { hashString, mulberry32 } from '../../domain/seed';
-import type { Cargo, StoragePosition } from '../../domain/types';
+import type { Cargo } from '../../domain/types';
+import { heightAt } from '../../domain/yard';
 import { canvasTexture } from '../kit';
 
 /**
@@ -10,7 +12,7 @@ import { canvasTexture } from '../kit';
  * that are drawn with one InstancedMesh per primitive kind.
  */
 
-export type PrimKind = 'pallet' | 'carton' | 'tape' | 'wrap' | 'crate' | 'reel' | 'cable' | 'bag' | 'body' | 'pipe' | 'wood';
+export type PrimKind = 'pallet' | 'carton' | 'tape' | 'wrap' | 'crate' | 'reel' | 'cable' | 'bag' | 'body' | 'pipe' | 'wood' | 'label';
 
 export interface Prim {
   kind: PrimKind;
@@ -94,12 +96,31 @@ function crateTexture() {
   });
 }
 
+/** Printed shipping label: barcode, QR-ish block and text lines (spec §11: physical label). */
+function labelTexture() {
+  return canvasTexture('cargo-label', 192, 128, (ctx, w, h) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#2f5ff0';
+    ctx.fillRect(0, 0, w, 16);
+    ctx.fillStyle = '#1b2233';
+    const rng = mulberry32(42);
+    for (let x = 14; x < w - 14; ) {
+      const bar = 1 + Math.floor(rng() * 4);
+      if (rng() > 0.35) ctx.fillRect(x, 26, bar, 50);
+      x += bar + 1;
+    }
+    for (let i = 0; i < 3; i++) ctx.fillRect(14, 86 + i * 12, 60 + ((i * 37) % 70), 6);
+    for (let i = 0; i < 25; i++) if (rng() > 0.45) ctx.fillRect(w - 50 + (i % 5) * 7, 84 + Math.floor(i / 5) * 7, 6, 6);
+  });
+}
+
 export function makePrimAssets() {
   const white = (roughness: number, opts: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
     new THREE.MeshStandardMaterial({ color: '#ffffff', roughness, ...opts });
   return {
     pallet: { geometry: palletGeometry(), material: white(0.85) },
-    carton: { geometry: new RoundedBoxGeometry(1, 1, 1, 1, 0.035), material: white(0.8) },
+    carton: { geometry: new THREE.BoxGeometry(1, 1, 1), material: white(0.8) },
     tape: { geometry: new THREE.BoxGeometry(1, 1, 1), material: white(0.5) },
     wrap: { geometry: new RoundedBoxGeometry(1, 1, 1, 1, 0.07), material: white(0.28, { metalness: 0.05 }) },
     crate: { geometry: new THREE.BoxGeometry(1, 1, 1), material: new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: 0.85 }) },
@@ -109,6 +130,7 @@ export function makePrimAssets() {
     body: { geometry: new RoundedBoxGeometry(1, 1, 1, 1, 0.06), material: white(0.5, { metalness: 0.15 }) },
     pipe: { geometry: pipeGeometry(), material: white(0.35, { metalness: 0.45 }) },
     wood: { geometry: new THREE.BoxGeometry(1, 1, 1), material: white(0.85) },
+    label: { geometry: new THREE.BoxGeometry(1, 1, 1), material: new THREE.MeshStandardMaterial({ map: labelTexture(), roughness: 0.6 }) },
   } satisfies Record<PrimKind, { geometry: THREE.BufferGeometry; material: THREE.Material }>;
 }
 
@@ -117,22 +139,30 @@ const BLUE_TONES = ['#2f64f0', '#3a70ff', '#2a5be0', '#346bf7'];
 const CABLE_TONES = ['#1d2b5a', '#d64b4b', '#2f5ff0', '#2b3140'];
 
 /**
- * Layout for every cargo item: stacks on its position (spec §25), then the
- * primitives that draw it. Pure function of the World State.
+ * Layout for every cargo item: where it stands (floor spot or on top of
+ * another unit), then the primitives that draw it. Pure function of the
+ * World State.
  */
-export function buildCargoPrims(cargo: Cargo[], positions: Map<string, StoragePosition>) {
+export function buildCargoPrims(cargo: Cargo[], labelled: Set<string> = new Set()) {
   const prims: Prim[] = [];
   const bounds: CargoBounds[] = [];
-  const stackTop = new Map<string, number>();
-  const order = cargo.map((_, i) => i).sort((a, b) => cargo[a].stackLevel - cargo[b].stackLevel);
+  const index = new Map(cargo.map((c, i) => [c.id, i]));
+  const baseZ = new Map<string, number>();
+  const zOf = (c: Cargo, depth = 0): number => {
+    const memo = baseZ.get(c.id);
+    if (memo !== undefined) return memo;
+    const below = c.on ? cargo[index.get(c.on) ?? -1] : undefined;
+    const z = below && depth < 8 ? zOf(below, depth + 1) + below.dims.h + 0.02 : heightAt(devYard, c.x, c.y);
+    baseZ.set(c.id, z);
+    return z;
+  };
 
-  for (const i of order) {
+  for (let i = 0; i < cargo.length; i++) {
     const c = cargo[i];
-    const pos = positions.get(c.positionId);
-    if (!pos) continue;
-    const base = stackTop.get(pos.id) ?? pos.z;
+    const base = zOf(c);
     const rng = mulberry32(hashString(c.id));
-    const yaw = c.look === 'container' ? 0 : (rng() - 0.5) * 0.06;
+    const yaw = c.yaw + (c.on ? (rng() - 0.5) * 0.05 : 0);
+    const pos = { x: c.x, y: c.y };
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
     const { l, w, h } = c.dims;
@@ -215,7 +245,14 @@ export function buildCargoPrims(cargo: Cargo[], positions: Map<string, StoragePo
         break;
     }
 
-    stackTop.set(pos.id, base + h + (c.look === 'container' ? 0 : 0.02));
+    if (labelled.has(c.id) && c.look !== 'container' && c.look !== 'pipes') {
+      // Label on the south and east faces, where the default view looks from.
+      const zl = c.look === 'drum' ? h * 0.5 : c.look === 'machine' ? 0.47 : c.look === 'crate' ? h * 0.62 : Math.min(h - 0.16, PALLET_H + (h - PALLET_H) * 0.62);
+      const inset = c.look === 'machine' ? 0.04 * w : c.look === 'bag' ? 0.02 : 0;
+      add('label', c.look === 'bag' ? 0.3 : 0, -w / 2 + inset - 0.004, zl, 0.32, 0.22, 0.008, '#ffffff');
+      if (c.look !== 'drum') add('label', l / 2 - (c.look === 'machine' ? 0.02 * l : 0) + 0.004, 0, zl, 0.008, 0.22, 0.32, '#ffffff');
+    }
+
     bounds[i] = { x: pos.x, y: pos.y, base, top: base + h, l, w, yaw };
   }
   return { prims, bounds };

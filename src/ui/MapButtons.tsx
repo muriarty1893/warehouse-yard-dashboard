@@ -1,4 +1,4 @@
-import { House, Keyboard, Minus, Plus, RotateCcw, RotateCw } from 'lucide-react';
+import { House, Keyboard, Layers, Map as MapIcon, Minus, Plus, RotateCcw, RotateCw } from 'lucide-react';
 import { useView } from '../state/view';
 import { Card, IconButton, Kbd } from './kit';
 
@@ -6,8 +6,14 @@ export function MapButtons() {
   const send = useView((s) => s.send);
   const help = useView((s) => s.help);
   const toggleHelp = useView((s) => s.toggleHelp);
+  const layers = useView((s) => s.layers);
+  const toggleLayers = useView((s) => s.toggleLayers);
   return (
     <Card className="flex flex-col items-center gap-0.5 p-1">
+      <IconButton title="Map layers & lighting (L)" onClick={() => toggleLayers()} active={layers}>
+        <Layers size={16} />
+      </IconButton>
+      <div className="my-0.5 h-px w-6 bg-line" />
       <IconButton title="Zoom in (Z)" onClick={() => send({ kind: 'zoom', factor: 0.7 })}>
         <Plus size={17} />
       </IconButton>
@@ -24,6 +30,9 @@ export function MapButtons() {
       <IconButton title="Home view (H)" onClick={() => send({ kind: 'home' })}>
         <House size={16} />
       </IconButton>
+      <IconButton title="Top-down plan view (T)" onClick={() => send({ kind: 'top' })}>
+        <MapIcon size={16} />
+      </IconButton>
       <div className="my-0.5 h-px w-6 bg-line" />
       <IconButton title="Keyboard controls (?)" onClick={() => toggleHelp()} active={help}>
         <Keyboard size={16} />
@@ -36,12 +45,18 @@ const SHORTCUTS: [string[], string][] = [
   [['W', 'A', 'S', 'D'], 'Pan (hold Shift for fast)'],
   [['Q', 'E'], 'Rotate'],
   [['Z', 'X'], 'Zoom in / out'],
-  [['H'], 'Home view'],
+  [['H', 'T'], 'Home view · top-down view'],
   [['F'], 'Focus selection'],
+  [['C'], 'Register cargo'],
+  [['M'], 'Move selected cargo'],
+  [['R'], 'Turn the unit being placed'],
+  [['G'], 'Hold / resume selected vehicle'],
+  [['L', 'O'], 'Layers · cycle map colouring'],
+  [['N'], 'Day / night'],
   [['Space'], 'Pause / resume time'],
   [['1', '2', '3', '4'], 'Speed 1× · 2× · 4× · 8×'],
   [['/'], 'Search'],
-  [['Esc'], 'Clear selection'],
+  [['Esc'], 'Cancel / clear selection'],
 ];
 
 export function HelpPanel() {
@@ -68,7 +83,7 @@ export function HelpPanel() {
           </div>
         ))}
         <div className="mt-2 border-t border-line pt-2 text-[11.5px] leading-relaxed text-muted">
-          Mouse: drag to pan, right-drag to rotate, scroll to zoom. Click to select, double-click to fly to it.
+          Mouse: drag to pan, right-drag to rotate, scroll to zoom. Click to select, double-click to fly to it. While placing cargo, click a free spot or a unit to stack on.
         </div>
       </div>
     </Card>

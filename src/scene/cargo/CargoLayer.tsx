@@ -1,11 +1,12 @@
 import type { ThreeEvent } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import type { Cargo, StoragePosition } from '../../domain/types';
 import { useUi } from '../../state/ui';
+import { placeAt } from '../../ui/actions';
+import { labelledCargo, useInventory } from '../../world/inventory';
 import { Brackets, Pin, Tag } from '../markers';
-import { yardToWorld } from '../kit';
-import { buildCargoPrims, makePrimAssets, type Prim, type PrimKind } from './cargoPrims';
+import { unitBox, yardToWorld } from '../kit';
+import { buildCargoPrims, makePrimAssets, type CargoBounds, type Prim, type PrimKind } from './cargoPrims';
 import { Containers } from './Containers';
 import { selectAndFocus } from '../../ui/focus';
 
@@ -40,7 +41,6 @@ function PrimMesh({ prims, asset, onHover, onClick, onDoubleClick }: {
     <instancedMesh
       ref={ref}
       args={[asset.geometry, asset.material, prims.length]}
-      castShadow
       receiveShadow
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -61,9 +61,50 @@ function PrimMesh({ prims, asset, onHover, onClick, onDoubleClick }: {
   );
 }
 
-export function CargoLayer({ cargo, positions }: { cargo: Cargo[]; positions: Map<string, StoragePosition> }) {
+/**
+ * Shadows for all cargo from one box per unit: the detailed primitives (each
+ * carton, tape, label) are not drawn into the shadow map, which keeps the
+ * shadow pass cheap however full the yard is.
+ */
+function ShadowProxies({ bounds }: { bounds: CargoBounds[] }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const list = useMemo(() => bounds.filter(Boolean), [bounds]);
+  const material = useMemo(() => new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), []);
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    list.forEach((b, i) => {
+      q.setFromAxisAngle(up, b.yaw);
+      m.compose(new THREE.Vector3(...yardToWorld(b.x, b.y, (b.base + b.top) / 2)), q, new THREE.Vector3(b.l * 0.96, b.top - b.base, b.w * 0.96));
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [list]);
+  if (!list.length) return null;
+  return <instancedMesh key={list.length} ref={ref} args={[unitBox, material, list.length]} castShadow raycast={() => null} />;
+}
+
+/** Top unit of the stack that `id` belongs to (where a new unit would go). */
+export function stackTopOf(cargo: { id: string; on: string | null }[], id: string) {
+  let top = id;
+  for (let guard = 0; guard < 8; guard++) {
+    const above = cargo.find((c) => c.on === top);
+    if (!above) break;
+    top = above.id;
+  }
+  return top;
+}
+
+export function CargoLayer() {
+  const cargo = useInventory((s) => s.cargo);
+  const documents = useInventory((s) => s.documents);
+  const labelled = useMemo(() => labelledCargo(documents), [documents]);
   const assets = useMemo(makePrimAssets, []);
-  const { prims, bounds } = useMemo(() => buildCargoPrims(cargo, positions), [cargo, positions]);
+  const { prims, bounds } = useMemo(() => buildCargoPrims(cargo, labelled), [cargo, labelled]);
   const byKind = useMemo(() => {
     const groups = new Map<PrimKind, Prim[]>();
     for (const p of prims) {
@@ -84,7 +125,8 @@ export function CargoLayer({ cargo, positions }: { cargo: Cargo[]; positions: Ma
     if (i !== null) hover({ kind: 'cargo', id: cargo[i].id });
     else if (useUi.getState().hovered?.kind === 'cargo') hover(null);
   };
-  const onClick = (i: number) => select({ kind: 'cargo', id: cargo[i].id });
+  // In placement mode, clicking a unit means "put it on top of this stack".
+  const onClick = (i: number) => (useUi.getState().placing ? placeAt({ on: stackTopOf(cargo, cargo[i].id) }) : select({ kind: 'cargo', id: cargo[i].id }));
   const onDoubleClick = (i: number) => selectAndFocus({ kind: 'cargo', id: cargo[i].id });
 
   const highlight = [...new Set([selected, hovered].filter((x): x is string => !!x))];
@@ -92,8 +134,9 @@ export function CargoLayer({ cargo, positions }: { cargo: Cargo[]; positions: Ma
   return (
     <group>
       {byKind.map(([kind, list]) => (
-        <PrimMesh key={kind} prims={list} asset={assets[kind]} onHover={onHover} onClick={onClick} onDoubleClick={onDoubleClick} />
+        <PrimMesh key={`${kind}|${list.length}`} prims={list} asset={assets[kind]} onHover={onHover} onClick={onClick} onDoubleClick={onDoubleClick} />
       ))}
+      <ShadowProxies bounds={bounds} />
       <Containers cargo={cargo} bounds={bounds} onHover={onHover} onClick={onClick} onDoubleClick={onDoubleClick} />
 
       {cargo.map((c, i) =>
@@ -111,7 +154,7 @@ export function CargoLayer({ cargo, positions }: { cargo: Cargo[]; positions: Ma
             <Tag
               y={b.top - b.base + (c.pinned ? 2.6 : 0.9)}
               title={c.id}
-              subtitle={`${c.description} · ${c.positionId}`}
+              subtitle={c.description}
               variant="light"
             />
           </group>

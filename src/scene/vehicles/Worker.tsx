@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import * as THREE from 'three';
 import { groundAt, type WorkerSpec } from '../../config/fleet';
 import { clock } from '../../sim/clock';
+import { entityTime } from '../../sim/control';
+import { useLayers } from '../../state/layers';
 import { compileRoute, evalRoute, newPose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
 import { Box, mat, palette, RBox, unitSphere, yardToWorld } from '../kit';
@@ -31,6 +33,7 @@ export function Worker({ spec }: { spec: WorkerSpec }) {
   const route = useMemo(() => (spec.route ? compileRoute(spec.route) : null), [spec.route]);
   const pose = useMemo(newPose, []);
   const highlight = useHighlight('worker', spec.id);
+  const tags = useLayers((s) => s.tags);
   const hover = useUi((s) => s.hover);
   const unhover = useUi((s) => s.unhover);
   const select = useUi((s) => s.select);
@@ -43,7 +46,7 @@ export function Worker({ spec }: { spec: WorkerSpec }) {
 
   useFrame(() => {
     if (!route || !root.current) return;
-    evalRoute(route, clock.t, pose);
+    evalRoute(route, entityTime(spec.id, clock.t), pose);
     root.current.position.set(...yardToWorld(pose.x, pose.y, groundAt(pose.x, pose.y)));
     root.current.rotation.y = pose.heading;
     const phase = pose.odometer * 3.2;
@@ -86,12 +89,8 @@ export function Worker({ spec }: { spec: WorkerSpec }) {
         <mesh geometry={unitSphere} material={mat('#f0c8a0')} position={[0, 1.62, 0]} scale={0.12} castShadow />
         <mesh geometry={unitSphere} material={mat('#ffffff', { roughness: 0.4 })} position={[0, 1.69, 0]} scale={[0.14, 0.09, 0.14]} castShadow />
       </group>
-      {highlight && (
-        <>
-          <Brackets size={[0.8, 1.85, 0.8]} strong={highlight === 'selected'} />
-          <Tag y={2.6} title={spec.id} subtitle={`${spec.name} · ${spec.role}`} variant="light" />
-        </>
-      )}
+      {highlight && <Brackets size={[0.8, 1.85, 0.8]} strong={highlight === 'selected'} />}
+      {(highlight || tags) && <Tag y={2.6} title={spec.name} subtitle={spec.role} variant="light" />}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
         <circleGeometry args={[0.32, 20]} />
         <meshBasicMaterial color={palette.navy} transparent opacity={0.08} depthWrite={false} />
