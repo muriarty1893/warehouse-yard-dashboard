@@ -130,7 +130,7 @@ export function buildCargoPrims(cargo: Cargo[], positions: Map<string, StoragePo
     const c = cargo[i];
     const pos = positions.get(c.positionId);
     if (!pos) continue;
-    const base = stackTop.get(pos.id) ?? 0;
+    const base = stackTop.get(pos.id) ?? pos.z;
     const rng = mulberry32(hashString(c.id));
     const yaw = c.look === 'container' ? 0 : (rng() - 0.5) * 0.06;
     const cos = Math.cos(yaw);

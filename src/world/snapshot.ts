@@ -128,10 +128,9 @@ export interface Kpis {
   positionsUsed: number;
   positionsTotal: number;
   departuresToday: number;
+  /** Truck loading spaces / docks in use. */
   docksBusy: number;
   docksTotal: number;
-  baysBusy: number;
-  baysTotal: number;
   staged: number;
   forkliftsWorking: number;
   forkliftsTotal: number;
@@ -155,18 +154,9 @@ export interface WorldSnapshot {
 const inRect = (r: Rect, x: number, y: number) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
 const AREA_NAMES: Record<string, string> = {
-  'FK-APRON': 'Forklift apron',
-  'FK-CORRIDOR': 'Forklift corridor',
-  'FK-AISLE-N': 'Forklift aisle',
-  'FK-AISLE-S': 'Forklift aisle',
+  'LANE-GATE': 'Gate lane',
+  'FK-RAMP': 'Forklift lane',
   'R-CHARGE': 'Charging area',
-  'R-FUEL': 'Fuel area',
-  'LANE-MAIN': 'Main lane',
-  'LANE-CIRC': 'Circulation lane',
-  'WALK-GATE': 'Gate walkway',
-  'WALK-WEST': 'West walkway',
-  'WALK-SOUTH': 'Walkway',
-  'WALK-DOOR': 'Walkway',
 };
 
 function insideBoundary(x: number, y: number) {
@@ -188,10 +178,11 @@ export function whereIs(x: number, y: number): string {
     if (Math.abs(along) <= bay.length / 2 && Math.abs(across) <= bay.width / 2) return bay.id;
   }
   for (const z of yard.zones) if (inRect(z.rect, x, y)) return z.name;
+  for (const r of yard.ramps) if (inRect(r.rect, x, y)) return 'Forklift ramp';
   for (const a of yard.areas) if (inRect(a.rect, x, y) && AREA_NAMES[a.id]) return AREA_NAMES[a.id];
   for (const b of yard.buildings) if (inRect(b.rect, x, y)) return b.name;
   if (!insideBoundary(x, y)) return y < 0 ? 'Public road' : 'Outside yard';
-  return y > 47 && x < 90 ? 'Truck court' : 'Yard';
+  return 'Yard';
 }
 
 function bayAt(x: number, y: number, kind: TruckSpec['kind']): TruckBay | null {
@@ -239,7 +230,8 @@ const truckModels: TruckModel[] = trucks.map((spec) => {
   } else if (spec.pose) {
     bay = bayAt(spec.pose.x, spec.pose.y, spec.kind);
   }
-  const unloading = spec.activity === 'unloading' || (bay?.kind === 'dock' && !!route);
+  const workLeg = route?.legs.find((l) => l.leg.phase === 'working');
+  const unloading = spec.activity === 'unloading' || !!workLeg?.leg.status?.startsWith('Unloading');
   const h = hashString(spec.id);
   return {
     spec,
@@ -420,8 +412,15 @@ function forkliftState(m: (typeof forkliftModels)[number], t: number): ForkliftS
   const bay = truckModels.find((tm) => tm.spec.id === spec.serves)?.bay?.id ?? '';
   const statusMap: Record<string, ForkliftStatus> = { picking: 'picking', carrying: 'carrying', working: 'loading', returning: 'returning' };
   const status = statusMap[pose.phase ?? ''] ?? 'returning';
-  const detail =
-    status === 'picking' ? `Picking at ${spec.pick}` : status === 'carrying' ? `To ${bay} · ${truck}` : status === 'loading' ? `Loading ${truck} at ${bay}` : 'Returning to pick';
+  const detail = !spec.serves
+    ? pose.status
+    : status === 'picking'
+      ? `Picking at ${spec.pick}`
+      : status === 'carrying'
+        ? `To ${bay} · ${truck}`
+        : status === 'loading'
+          ? `Loading ${truck} at ${bay}`
+          : 'Returning to pick';
   const top = cargo.filter((c) => c.positionId === spec.pick).sort((a, b) => b.stackLevel - a.stackLevel)[0];
   return {
     ...common,
@@ -448,7 +447,7 @@ function zoneStates(): ZoneState[] {
       return {
         id: z.id,
         name: z.name,
-        kind: z.kind === 'container' ? 'Containers' : z.id === 'A' ? 'Palletized goods' : z.id === 'B' ? 'Industrial' : 'Mixed freight',
+        kind: z.description ?? z.kind,
         color: z.color,
         used: slots.filter((p) => usedSlots.has(p.id)).length,
         total: slots.length,
@@ -493,8 +492,7 @@ export function computeSnapshot(t: number): WorldSnapshot {
     }, 0);
   const positionsUsed = zonesStatic.reduce((s, z) => s + z.used, 0);
   const positionsTotal = zonesStatic.reduce((s, z) => s + z.total, 0);
-  const docks = bays.filter((b) => b.kind === 'dock');
-  const loadingBays = bays.filter((b) => b.kind === 'loading');
+  const docks = bays.filter((b) => b.kind !== 'staging');
 
   const kpis: Kpis = {
     cargo: cargo.length - loaded + received,
@@ -508,8 +506,6 @@ export function computeSnapshot(t: number): WorldSnapshot {
     departuresToday: departed,
     docksBusy: docks.filter((b) => b.status !== 'available').length,
     docksTotal: docks.length,
-    baysBusy: loadingBays.filter((b) => b.status !== 'available').length,
-    baysTotal: loadingBays.length,
     staged: bays.filter((b) => b.kind === 'staging' && b.status !== 'available').length,
     forkliftsWorking: forkliftStates.filter((f) => f.status !== 'charging' && f.status !== 'idle').length,
     forkliftsTotal: forkliftStates.length,

@@ -35,8 +35,12 @@ export interface StorageGrid {
 export interface Zone {
   id: string;
   name: string;
+  /** Short description shown in the dashboard. */
+  description?: string;
   kind: ZoneKind;
   rect: Rect;
+  /** Floor height of the zone (meters) — e.g. on a raised platform. */
+  elevation?: number;
   grid?: StorageGrid;
   /** Tint used for the painted zone label. */
   color: string;
@@ -52,6 +56,8 @@ export interface StoragePosition {
   w: number;
   d: number;
   maxStack: number;
+  /** Floor height of the slot. */
+  z: number;
   /** Which aisle a forklift approaches this slot from. */
   face: 'north' | 'south';
 }
@@ -71,9 +77,13 @@ export interface TruckBay {
 export interface Building {
   id: string;
   name: string;
-  kind: 'warehouse' | 'office' | 'gatehouse';
+  /** canopy = raised, roofed hold space without walls. */
+  kind: 'warehouse' | 'office' | 'gatehouse' | 'canopy';
   rect: Rect;
   height: number;
+  /** Raised floor height (canopy platforms). */
+  elevation?: number;
+  floors?: number;
   /** Dock door centers along the building's south face (x, meters). */
   docks?: { id: string; x: number }[];
   subtitle?: string;
@@ -86,14 +96,30 @@ export interface Area {
   kind: AreaKind;
   rect: Rect;
   label?: string;
+  /** Painted on a raised floor (platform) instead of the ground. */
+  elevation?: number;
   /** For crossings: direction of the stripes. */
   stripes?: 'ns' | 'ew';
 }
 
 export interface Gate {
   id: string;
+  name: string;
   a: Vec2;
   b: Vec2;
+  /** A closed door in the boundary (drawn, not driven through). */
+  closed?: boolean;
+  /** Sliding gate: where the open gate panel is parked along the boundary (x range). */
+  parkedPanel?: [number, number];
+}
+
+/** Sloped surface from the ground up to a platform. */
+export interface Ramp {
+  id: string;
+  rect: Rect;
+  rise: number;
+  /** Direction the ramp climbs towards. */
+  up: 'north' | 'south' | 'east' | 'west';
 }
 
 export interface YardConfig {
@@ -105,6 +131,7 @@ export interface YardConfig {
   zones: Zone[];
   bays: TruckBay[];
   buildings: Building[];
+  ramps: Ramp[];
   areas: Area[];
 }
 

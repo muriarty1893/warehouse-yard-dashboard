@@ -18,7 +18,7 @@ import { Ground } from './site/Ground';
 import { Props } from './site/Props';
 import { Scenery } from './site/Scenery';
 import { Forklift } from './vehicles/Forklift';
-import { ParkedCars, Traffic } from './vehicles/Traffic';
+import { Traffic } from './vehicles/Traffic';
 import { Truck } from './vehicles/Truck';
 import { Worker } from './vehicles/Worker';
 
@@ -30,10 +30,10 @@ function Sun() {
     light.target.position.set(...YARD_CENTER);
     light.target.updateMatrixWorld();
     const cam = light.shadow.camera;
-    cam.left = -125;
-    cam.right = 125;
-    cam.top = 115;
-    cam.bottom = -115;
+    cam.left = -75;
+    cam.right = 75;
+    cam.top = 70;
+    cam.bottom = -70;
     cam.near = 20;
     cam.far = 420;
     cam.updateProjectionMatrix();
@@ -76,7 +76,7 @@ export function YardScene() {
         <Nature />
       </Suspense>
       <Scenery yard={yard} />
-      <Buildings buildings={yard.buildings} />
+      <Buildings yard={yard} />
       <Props yard={yard} />
       <CargoLayer cargo={cargo} positions={positions} />
       {trucks.map((t) => (
@@ -89,7 +89,6 @@ export function YardScene() {
         <Worker key={w.id} spec={w} />
       ))}
       <Traffic />
-      <ParkedCars />
 
       <MapControls
         makeDefault

@@ -43,7 +43,7 @@ export function OpsTable() {
   const k = useWorld((s) => s.kpis);
   const docks = bays.filter((b) => b.kind !== 'staging');
   const tabs: { id: Tab; label: string; count: string }[] = [
-    { id: 'docks', label: 'Docks', count: `${k.docksBusy + k.baysBusy}/${k.docksTotal + k.baysTotal}` },
+    { id: 'docks', label: 'Bays', count: `${k.docksBusy}/${k.docksTotal}` },
     { id: 'forklifts', label: 'Forklifts', count: `${k.forkliftsWorking}/${k.forkliftsTotal}` },
     { id: 'trucks', label: 'Trucks', count: String(trucks.length) },
   ];
@@ -62,7 +62,7 @@ export function OpsTable() {
             </button>
           ))}
         </div>
-        <span className="text-[11.5px] font-medium text-muted">{yard.name.replace('Docktor ', '')}</span>
+        <span className="text-[11.5px] font-medium text-muted">{yard.name}</span>
       </div>
       <div className="max-h-[172px] overflow-y-auto pr-1">
         {tab === 'docks' &&

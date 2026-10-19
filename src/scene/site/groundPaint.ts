@@ -1,4 +1,5 @@
 import type { Area, Rect, StoragePosition, TruckBay, YardConfig, Zone } from '../../domain/types';
+import { yardBounds } from '../../domain/yard';
 import { palette, FONT } from '../kit';
 
 /**
@@ -6,7 +7,11 @@ import { palette, FONT } from '../kit';
  * restricted areas, labels) onto a canvas straight from the yard config.
  */
 
-export const GROUND_EXTENT = { x0: -6, x1: 166, y0: 0, y1: 112, ppm: 20 };
+/** Canvas extent around the yard (the outside is covered by grass beds and the road). */
+export function groundExtent(yard: YardConfig) {
+  const b = yardBounds(yard);
+  return { x0: b.x0 - 8, x1: b.x1 + 8, y0: b.y0, y1: b.y1 + 8, ppm: 32 };
+}
 
 export interface Painter {
   ctx: CanvasRenderingContext2D;
@@ -97,7 +102,7 @@ function arrow(p: Painter, x: number, y: number, heading: number, size: number, 
 const WHITE = 'rgba(255,255,255,0.95)';
 const YELLOW = palette.yellow;
 
-function paintArea(p: Painter, a: Area) {
+export function paintArea(p: Painter, a: Area) {
   const r = a.rect;
   switch (a.kind) {
     case 'truckLane': {
@@ -107,10 +112,8 @@ function paintArea(p: Painter, a: Area) {
         line(p, [r.x + 0.3, r.y], [r.x + 0.3, r.y + r.h], 0.15, WHITE);
         line(p, [r.x + r.w - 0.3, r.y], [r.x + r.w - 0.3, r.y + r.h], 0.15, WHITE);
         line(p, [r.x + r.w / 2, r.y], [r.x + r.w / 2, r.y + r.h], 0.15, WHITE, [3, 3]);
-        for (const yy of [16, 34]) {
-          arrow(p, r.x + r.w * 0.75, yy, Math.PI / 2, 3, WHITE);
-          arrow(p, r.x + r.w * 0.25, yy - 4, -Math.PI / 2, 3, WHITE);
-        }
+        arrow(p, r.x + r.w * 0.75, r.y + r.h * 0.62, Math.PI / 2, 2.6, WHITE);
+        arrow(p, r.x + r.w * 0.25, r.y + r.h * 0.62, -Math.PI / 2, 2.6, WHITE);
       } else {
         line(p, [r.x, r.y + 0.3], [r.x + r.w, r.y + 0.3], 0.15, WHITE);
         line(p, [r.x, r.y + r.h - 0.3], [r.x + r.w, r.y + r.h - 0.3], 0.15, WHITE);
@@ -196,7 +199,7 @@ function paintBay(p: Painter, bay: TruckBay) {
 }
 
 export function paintGround(ctx: CanvasRenderingContext2D, yard: YardConfig) {
-  const g = GROUND_EXTENT;
+  const g = groundExtent(yard);
   const p = makePainter(ctx, g.x0, g.y1, g.ppm);
 
   ctx.fillStyle = palette.ground;
@@ -219,22 +222,14 @@ export function paintGround(ctx: CanvasRenderingContext2D, yard: YardConfig) {
   ctx.lineWidth = 0.5 * p.k;
   ctx.stroke();
 
-  // Office forecourt and staff car park (outside the yard fence).
-  fillRect(p, { x: 96, y: 70, w: 30, h: 22 }, palette.yard);
-  fillRect(p, { x: 128, y: 64, w: 29, h: 43 }, palette.lane);
-  for (let i = 0; i <= 10; i++) {
-    const y = 66 + i * 2.8;
-    line(p, [130, y], [135.5, y], 0.1, WHITE);
-    line(p, [149.5, y], [155, y], 0.1, WHITE);
-  }
-
   // Zone floors.
   for (const z of yard.zones) {
     if (z.kind === 'storage' || z.kind === 'container') fillRect(p, z.rect, '#e8ecf6');
   }
 
-  for (const a of yard.areas) if (a.kind !== 'crossing') paintArea(p, a);
-  for (const a of yard.areas) if (a.kind === 'crossing') paintArea(p, a);
+  const ground = yard.areas.filter((a) => !a.elevation);
+  for (const a of ground) if (a.kind !== 'crossing') paintArea(p, a);
+  for (const a of ground) if (a.kind === 'crossing') paintArea(p, a);
   for (const b of yard.bays) paintBay(p, b);
 
   for (const z of yard.zones) {
@@ -243,10 +238,13 @@ export function paintGround(ctx: CanvasRenderingContext2D, yard: YardConfig) {
     text(p, z.name.toUpperCase(), z.rect.x + z.rect.w / 2, z.rect.y + z.rect.h - 1.6, 1.5, 'rgba(47, 95, 240, 0.55)', { spacing: 0.25 });
   }
 
-  // Gate lane labels.
-  text(p, 'IN', 51, 4.2, 1.6, WHITE, { spacing: 0.2 });
-  text(p, 'OUT', 41, 4.2, 1.6, WHITE, { spacing: 0.2 });
-  text(p, 'TRUCK COURT', 45, 58, 1.6, 'rgba(47, 95, 240, 0.4)', { spacing: 0.25 });
+  // Lane labels just inside each drive-through gate on the south edge.
+  for (const gate of yard.gates) {
+    if (gate.closed || gate.a[1] !== gate.b[1]) continue;
+    const mid = (gate.a[0] + gate.b[0]) / 2;
+    text(p, 'IN', mid + 4, gate.a[1] + 2.4, 1.3, WHITE, { spacing: 0.2 });
+    text(p, 'OUT', mid - 4, gate.a[1] + 2.4, 1.3, WHITE, { spacing: 0.2 });
+  }
 }
 
 /** Zone overlay: slot outlines, slot IDs and the zone name, at higher resolution. */

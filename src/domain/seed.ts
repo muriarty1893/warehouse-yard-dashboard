@@ -119,19 +119,18 @@ type FixedSlot = { look: CargoLook; levels?: number; id?: string; pinned?: boole
 /** Slots with fixed content: spec examples + slots that forklifts work. */
 const FIXED: Record<string, FixedSlot | 'empty'> = {
   B17: { look: 'cartons', id: 'CARGO-18492', pinned: true, description: 'Pallet · Ankara' },
-  C12: { look: 'group-cartons', id: 'GROUP-0042', pinned: true, description: '20 identical boxes' },
-  D04: 'empty',
-  A43: { look: 'cartons', levels: 1 },
-  C05: { look: 'wrap-blue', levels: 1 },
-  B45: { look: 'bag', levels: 1 },
-  A20: { look: 'wrap-blue', levels: 2, pinned: true },
-  D06: { look: 'container', levels: 2, pinned: true },
+  C05: { look: 'group-cartons', id: 'GROUP-0042', pinned: true, description: '20 identical boxes' },
+  B16: { look: 'cartons', levels: 1 },
+  A05: { look: 'bag', levels: 1 },
+  A10: { look: 'drum', pinned: true },
+  B08: { look: 'wrap-blue', levels: 2, pinned: true },
 };
 
+/** Open storage gets weatherproof goods; the covered hold spaces get palletized goods. */
 const ZONE_MIX: Record<string, Partial<Record<CargoLook, number>>> = {
-  A: { cartons: 0.55, 'wrap-blue': 0.3, 'wrap-white': 0.15 },
-  B: { crate: 0.3, drum: 0.22, machine: 0.14, bag: 0.34 },
-  C: { cartons: 0.4, pipes: 0.18, bag: 0.14, 'wrap-blue': 0.2, 'wrap-white': 0.08 },
+  A: { crate: 0.3, drum: 0.25, pipes: 0.2, machine: 0.1, bag: 0.15 },
+  B: { cartons: 0.5, 'wrap-blue': 0.3, 'wrap-white': 0.2 },
+  C: { cartons: 0.35, 'wrap-blue': 0.25, crate: 0.2, bag: 0.2 },
 };
 
 export function seedCargo(yard: YardConfig): Cargo[] {

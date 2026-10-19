@@ -4,14 +4,18 @@ import * as THREE from 'three';
 import { SPEEDS, useSim } from '../sim/clock';
 import { useUi } from '../state/ui';
 import { useView } from '../state/view';
+import { devYard } from '../config/devYard';
+import { yardBounds } from '../domain/yard';
 import { focusEntity } from '../ui/focus';
 import { yardToWorld } from './kit';
 import { entityObject } from './registry';
 
-export const YARD_CENTER: [number, number, number] = [86, 0, -50];
-export const HOME_POSITION: [number, number, number] = [YARD_CENTER[0] + 92, 118, YARD_CENTER[2] + 128];
-export const MIN_DISTANCE = 12;
-export const MAX_DISTANCE = 380;
+const yb = yardBounds(devYard);
+const span = Math.max(yb.w, yb.h);
+export const YARD_CENTER: [number, number, number] = [yb.cx, 0, -yb.cy + 2];
+export const HOME_POSITION: [number, number, number] = [YARD_CENTER[0] + span * 0.62, span * 0.98, YARD_CENTER[2] + span * 1.12];
+export const MIN_DISTANCE = 8;
+export const MAX_DISTANCE = 260;
 
 interface ControlsLike {
   target: THREE.Vector3;

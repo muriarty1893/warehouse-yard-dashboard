@@ -17,10 +17,11 @@ Controls: drag to pan, right-drag to rotate, scroll to zoom, click a truck / for
 ## How it is built
 
 Everything is generated from config in **meters** (x east, y north). Nothing is hand-placed in the scene.
+The previous L-shaped demo yard is kept on the `l-shaped-dev-yard` branch.
 
 | Where | What |
 |---|---|
-| `src/config/devYard.ts` | The L-shaped dev yard (spec §5, §44): boundary, gate, zones A–D, loading zone, staging, bays/docks, walkways, crossings, restricted areas, buildings |
+| `src/config/devYard.ts` | The yard traced from `yardplan.png` (≈ 65.5 × 42 m, scale taken from the road lanes): main office building, raised covered hold spaces (canopy, no walls), forklift ramp, 4 truck loading spaces, open storage, staff building, main sliding gate + east garage door. Change numbers here to match real measurements. |
 | `src/config/fleet.ts` | Trucks, forklifts, workers, road traffic: static ones sit in a bay, scripted ones follow a route |
 | `src/domain/` | Domain types, storage-position generation (`A01…`, `B17`, `D04`), deterministic sample cargo (`CARGO-18492` @ B17, `GROUP-0042` @ C12) |
 | `src/sim/` | One simulation clock; routes are pure functions of time (paths with filleted corners, drive/wait legs) |

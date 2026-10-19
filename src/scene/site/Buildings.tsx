@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import type { Building } from '../../domain/types';
+import type { Building, Ramp, TruckBay, YardConfig } from '../../domain/types';
 import {
   Box,
   canvasTexture,
@@ -240,35 +240,125 @@ export function Gatehouse({ b }: { b: Building }) {
 export function Office({ b }: { b: Building }) {
   const { x, y, w, h } = b.rect;
   const H = b.height;
-  const signTex = signTexture('Yard Office', 'Docktor Dev Yard');
+  const floors = b.floors ?? 2;
+  const floorH = H / floors;
+  const signTex = signTexture(b.name, b.subtitle ?? '');
   return (
     <group position={yardToWorld(x + w / 2, y + h / 2)}>
       <RBox size={[w, H, h]} position={[0, H / 2, 0]} color={palette.white} radius={0.2} />
-      {[2.3, 5.7].map((wy) => (
-        <RBox key={wy} size={[w + 0.08, 1.7, h + 0.08]} position={[0, wy, 0]} material={glassMat()} radius={0.15} shadow={false} />
+      {Array.from({ length: floors }, (_, i) => (
+        <RBox key={i} size={[w + 0.08, floorH * 0.45, h + 0.08]} position={[0, i * floorH + floorH * 0.55, 0]} material={glassMat()} radius={0.15} shadow={false} />
       ))}
       <RBox size={[w + 0.4, 0.55, h + 0.4]} position={[0, H + 0.1, 0]} color={palette.blue} radius={0.12} />
-      <RoofUnit position={[-w * 0.25, H + 0.35, -h * 0.15]} />
-      <RoofUnit position={[w * 0.2, H + 0.35, -h * 0.1]} />
+      <RoofUnit position={[-w * 0.2, H + 0.35, -h * 0.15]} />
+      {w > 12 && <RoofUnit position={[w * 0.22, H + 0.35, -h * 0.1]} />}
       {/* Entrance facing the yard (south). */}
-      <RBox size={[7, 0.3, 3.2]} position={[0, 3.7, h / 2 + 1.5]} color={palette.blue} radius={0.08} />
-      <Cyl r={0.12} h={3.6} position={[-3.2, 1.8, h / 2 + 2.8]} color="#dfe4ee" />
-      <Cyl r={0.12} h={3.6} position={[3.2, 1.8, h / 2 + 2.8]} color="#dfe4ee" />
-      <mesh position={[0, H - 1.1, h / 2 + 0.06]}>
-        <planeGeometry args={[10.6, 2]} />
+      <RBox size={[Math.min(7, w * 0.5), 0.3, 3]} position={[0, Math.min(3.6, floorH), h / 2 + 1.4]} color={palette.blue} radius={0.08} />
+      <mesh position={[0, H - floorH * 0.32, h / 2 + 0.06]}>
+        <planeGeometry args={[Math.min(10.6, w * 0.8), Math.min(2, floorH * 0.5)]} />
         <meshStandardMaterial map={signTex} roughness={0.5} />
       </mesh>
     </group>
   );
 }
 
-export function Buildings({ buildings }: { buildings: Building[] }) {
+/**
+ * Raised hold space under a big canopy, no walls: a concrete platform at dock
+ * height, steel columns, a translucent roof with a blue fascia, and dock
+ * bumpers where trucks back up to the platform edge.
+ */
+export function Canopy({ b, bays }: { b: Building; bays: TruckBay[] }) {
+  const { x, y, w, h } = b.rect;
+  const E = b.elevation ?? 1.2;
+  const H = b.height;
+  const steel = mat('#5b6b8c', { roughness: 0.45, metalness: 0.4 });
+  const blue = mat(palette.blue, { roughness: 0.5 });
+  const cols: [number, number][] = [];
+  const nx = Math.max(1, Math.round(w / 7.5));
+  const ny = Math.max(1, Math.round(h / 7));
+  for (let i = 0; i <= nx; i++) for (const j of [0, ny]) cols.push([-w / 2 + 0.4 + (i * (w - 0.8)) / nx, -h / 2 + 0.4 + (j * (h - 0.8)) / ny]);
+  for (let j = 1; j < ny; j++) for (const i of [0, nx]) cols.push([-w / 2 + 0.4 + (i * (w - 0.8)) / nx, -h / 2 + 0.4 + (j * (h - 0.8)) / ny]);
+  // Bays whose back edge touches this platform's south face get bumpers.
+  const docks = bays.filter((bay) => {
+    const rearY = bay.center[1] - (Math.sin(bay.heading) * bay.length) / 2;
+    return Math.abs(rearY - y) < 0.5 && bay.center[0] > x && bay.center[0] < x + w;
+  });
+  const roofMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#cfdcfb', transparent: true, opacity: 0.38, roughness: 0.3, depthWrite: false, side: THREE.DoubleSide }), []);
+  return (
+    <group position={yardToWorld(x + w / 2, y + h / 2)}>
+      {/* Platform */}
+      <Box size={[w, E, h]} position={[0, E / 2, 0]} color="#d5dbe6" />
+      <Box size={[w + 0.02, 0.12, 0.3]} position={[0, E - 0.06, h / 2 - 0.15]} color={palette.yellow} shadow={false} />
+      <Box size={[w + 0.04, 0.35, 0.06]} position={[0, E - 0.18, h / 2 + 0.01]} color="#3a4256" shadow={false} />
+      {docks.map((bay) => (
+        <group key={bay.id} position={[bay.center[0] - (x + w / 2), 0, h / 2]}>
+          {[-1.25, 1.25].map((dx) => (
+            <RBox key={dx} size={[0.3, 0.5, 0.25]} position={[dx, E - 0.45, 0.12]} color={palette.tire} radius={0.05} />
+          ))}
+          <Box size={[2.2, 0.05, 0.6]} position={[0, E + 0.02, -0.3]} color="#9aa3b8" shadow={false} />
+        </group>
+      ))}
+      {/* Columns */}
+      {cols.map(([cx, cz], i) => (
+        <Box key={i} size={[0.3, H - E, 0.3]} position={[cx, E + (H - E) / 2, cz]} material={steel} />
+      ))}
+      {/* Roof: beams, translucent panels, fascia */}
+      {Array.from({ length: nx + 1 }, (_, i) => (
+        <Box key={i} size={[0.25, 0.4, h]} position={[-w / 2 + 0.4 + (i * (w - 0.8)) / nx, H - 0.2, 0]} material={steel} />
+      ))}
+      <mesh position={[0, H + 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} material={roofMat}>
+        <planeGeometry args={[w + 0.6, h + 0.6]} />
+      </mesh>
+      <Box size={[w + 0.8, 0.5, 0.3]} position={[0, H, h / 2 + 0.3]} material={blue} />
+      <Box size={[w + 0.8, 0.5, 0.3]} position={[0, H, -h / 2 - 0.3]} material={blue} />
+      <Box size={[0.3, 0.5, h + 0.6]} position={[w / 2 + 0.3, H, 0]} material={blue} />
+      <Box size={[0.3, 0.5, h + 0.6]} position={[-w / 2 - 0.3, H, 0]} material={blue} />
+    </group>
+  );
+}
+
+/** Forklift ramp: a sloped concrete wedge from the ground to the platform. */
+export function RampMesh({ ramp }: { ramp: Ramp }) {
+  const r = ramp.rect;
+  const geo = useMemo(() => {
+    // Profile in the climb direction (north): length r.h, rise ramp.rise; extruded across r.w.
+    const shape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(r.h, 0), new THREE.Vector2(r.h, ramp.rise)]);
+    const g = new THREE.ExtrudeGeometry(shape, { depth: r.w, bevelEnabled: false });
+    // shape x → yard north (world −z), shape y → up, extrude → east (world +x).
+    g.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1));
+    return g;
+  }, [r.h, r.w, ramp.rise]);
+  return (
+    <group position={yardToWorld(r.x, r.y)}>
+      <mesh geometry={geo} material={mat('#cdd4e0', { roughness: 0.9 })} castShadow receiveShadow />
+      {[0.15, r.w - 0.15].map((dx) => (
+        <mesh key={dx} position={[dx, ramp.rise / 2 + 0.06, -r.h / 2]} rotation={[Math.atan2(ramp.rise, r.h), 0, 0]} castShadow>
+          <boxGeometry args={[0.18, 0.12, Math.hypot(r.h, ramp.rise)]} />
+          <meshStandardMaterial color={palette.yellow} roughness={0.5} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+export function Buildings({ yard }: { yard: YardConfig }) {
   return (
     <group>
-      {buildings.map((b) => (
+      {yard.buildings.map((b) => (
         <Merge key={b.id}>
-          {b.kind === 'warehouse' ? <Warehouse b={b} /> : b.kind === 'gatehouse' ? <Gatehouse b={b} /> : <Office b={b} />}
+          {b.kind === 'warehouse' ? (
+            <Warehouse b={b} />
+          ) : b.kind === 'gatehouse' ? (
+            <Gatehouse b={b} />
+          ) : b.kind === 'canopy' ? (
+            <Canopy b={b} bays={yard.bays} />
+          ) : (
+            <Office b={b} />
+          )}
         </Merge>
+      ))}
+      {yard.ramps.map((r) => (
+        <RampMesh key={r.id} ramp={r} />
       ))}
     </group>
   );

@@ -98,16 +98,11 @@ function Fence({ yard }: { yard: YardConfig }) {
 // Light poles and bollards.
 
 const POLES: { x: number; y: number; heading: number }[] = [
-  { x: 34.5, y: 2, heading: Math.PI / 2 },
-  { x: 2, y: 30, heading: 0 },
-  { x: 2, y: 66, heading: 0 },
-  { x: 88.5, y: 70, heading: Math.PI },
-  { x: 58, y: 47.5, heading: Math.PI / 2 },
-  { x: 92.5, y: 56, heading: -Math.PI / 2 },
-  { x: 132, y: 57.5, heading: -Math.PI / 2 },
-  { x: 158.5, y: 29.5, heading: Math.PI },
-  { x: 132, y: 1.5, heading: Math.PI / 2 },
-  { x: 92.5, y: 1.5, heading: Math.PI / 2 },
+  { x: 1.2, y: 1.2, heading: Math.PI / 4 },
+  { x: 1.2, y: 24, heading: 0 },
+  { x: 29.8, y: 1.1, heading: Math.PI / 2 },
+  { x: 50.3, y: 1.1, heading: Math.PI / 2 },
+  { x: 52.8, y: 13.2, heading: Math.PI },
 ];
 
 function LightPole({ x, y, heading }: { x: number; y: number; heading: number }) {
@@ -124,9 +119,8 @@ function LightPole({ x, y, heading }: { x: number; y: number; heading: number })
 }
 
 const BOLLARDS: Vec2[] = [
-  [35.4, 1], [56.6, 1], [35.4, 3], [56.6, 3],
-  [9.4, 85.4], [80.6, 85.4], [59.5, 0.5], [65.5, 0.5],
-  [93.6, 3.5], [93.6, 40], [104.6, 26.5], [104.6, 32.5],
+  [30.2, 0.8], [49.8, 0.8], [30.2, 2.6], [49.8, 2.6],
+  [21.3, 20.6], [28.9, 20.6], [53.4, 11.3], [20.0, 26.6],
 ];
 
 export function Scenery({ yard }: { yard: YardConfig }) {

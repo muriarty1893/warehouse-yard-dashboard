@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { road } from '../../config/devYard';
 import { yardToWorld } from '../kit';
-import { clusters, GRASS_TOP, scatter, treeSpots, type Spot } from './landscape';
+import { clusters, GRASS_TOP, NEAR, scatter, treeSpots, type Spot } from './landscape';
 
 /**
  * Environment dressing from ready-made CC0 models (Kenney Nature Kit and City
@@ -126,7 +126,7 @@ const ROCKS = [
 /** Trees, bushes, grass tufts, flower patches and rocks on the grass beds. */
 export function Nature() {
   const groups = useMemo(() => {
-    const near: [number, number] = [-70, 260];
+    const near = NEAR;
     const trees = treeSpots();
     const bushes = scatter('bushes', 0.012, near, 1.2);
     const grass = scatter('grass', 0.14, near, 0.4);
@@ -150,7 +150,7 @@ export function Nature() {
 }
 
 /** Kenney road tiles (1 × 1 units) along the public road, with a driveway tile at the gate. */
-export const ROAD_TILE = 16;
+export const ROAD_TILE = 14;
 
 export function RoadTiles({ gateX }: { gateX: number }) {
   const { straight, driveway, lights } = useMemo(() => {
@@ -164,10 +164,10 @@ export function RoadTiles({ gateX }: { gateX: number }) {
       (Math.abs(tile.x - gateX) < 1 ? driveway : straight).push(tile);
     }
     const lights: Placement[] = [];
-    for (let x = gateX - 4 * 32; x < gateX + 8 * 32; x += 32) {
+    for (let x = gateX - 4 * 32; x < gateX + 5 * 32; x += 32) {
       if (Math.abs(x - gateX) < 14) continue;
-      lights.push({ x, y: road.y1 + 1.0, rot: 0, scale: 12 });
-      lights.push({ x: x + 16, y: road.y0 - 1.0, rot: Math.PI, scale: 12 });
+      lights.push({ x, y: road.y1 - 0.8, rot: 0, scale: 11 });
+      lights.push({ x: x + 16, y: road.y0 + 0.8, rot: Math.PI, scale: 11 });
     }
     return { straight, driveway, lights };
   }, [gateX]);

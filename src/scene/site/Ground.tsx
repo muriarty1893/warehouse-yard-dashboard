@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { Rect, YardConfig } from '../../domain/types';
 import { zonePositions } from '../../domain/yard';
 import { canvasTexture, mat, palette, yardToWorld } from '../kit';
-import { GROUND_EXTENT, paintGround, paintZone, ZONE_PPM } from './groundPaint';
+import { groundExtent, makePainter, paintArea, paintGround, paintZone, ZONE_PPM } from './groundPaint';
 import { GRASS_BEDS } from './landscape';
 
 /** A flat plane lying on the yard floor covering `rect`. */
@@ -51,7 +51,7 @@ function Slab({ rect, height, color, radius = 1.2, holes = [] }: { rect: Rect; h
 
 
 export function Ground({ yard }: { yard: YardConfig }) {
-  const g = GROUND_EXTENT;
+  const g = useMemo(() => groundExtent(yard), [yard]);
   const groundMat = useMemo(() => {
     const tex = canvasTexture(`ground|${yard.id}`, (g.x1 - g.x0) * g.ppm, (g.y1 - g.y0) * g.ppm, (ctx) => paintGround(ctx, yard));
     tex.anisotropy = 16;
@@ -71,6 +71,22 @@ export function Ground({ yard }: { yard: YardConfig }) {
     [yard],
   );
 
+  // Markings on raised floors (platforms) get their own small canvases.
+  const raisedAreas = useMemo(
+    () =>
+      yard.areas
+        .filter((a) => a.elevation)
+        .map((area) => {
+          const r = area.rect;
+          const tex = canvasTexture(`area|${yard.id}|${area.id}`, r.w * ZONE_PPM, r.h * ZONE_PPM, (ctx) =>
+            paintArea(makePainter(ctx, r.x, r.y + r.h, ZONE_PPM), area),
+          );
+          const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+          return { area, material: m };
+        }),
+    [yard],
+  );
+
   return (
     <group>
       {/* Endless outer ground. */}
@@ -80,7 +96,10 @@ export function Ground({ yard }: { yard: YardConfig }) {
 
       <FloorPlane rect={{ x: g.x0, y: g.y0, w: g.x1 - g.x0, h: g.y1 - g.y0 }} h={0} material={groundMat} />
       {zoneOverlays.map(({ zone, material }) => (
-        <FloorPlane key={zone.id} rect={zone.rect} h={0.01} material={material} />
+        <FloorPlane key={zone.id} rect={zone.rect} h={(zone.elevation ?? 0) + 0.012} material={material} />
+      ))}
+      {raisedAreas.map(({ area, material }) => (
+        <FloorPlane key={area.id} rect={area.rect} h={(area.elevation ?? 0) + 0.014} material={material} />
       ))}
 
       {GRASS_BEDS.map((gr, i) => (

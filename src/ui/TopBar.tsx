@@ -166,11 +166,11 @@ function YardChip() {
   const kpis = useWorld((s) => s.kpis);
   return (
     <div className="pointer-events-auto hidden h-11 items-center gap-2.5 rounded-xl border border-line bg-white py-1 pr-2 pl-1.5 shadow-[0_2px_8px_rgba(27,42,74,0.04)] lg:flex">
-      <span className="rounded-lg bg-brand px-1.5 py-1 text-[11px] font-bold text-white">YD-01</span>
+      <span className="rounded-lg bg-brand px-1.5 py-1 text-[11px] font-bold text-white">{yard.id}</span>
       <span className="leading-tight">
         <span className="block text-[13px] font-semibold text-ink">{yard.name}</span>
         <span className="block text-[11px] text-muted">
-          {Math.round(kpis.storagePct)}% used · {kpis.docksBusy}/{kpis.docksTotal} docked
+          {Math.round(kpis.storagePct)}% used · {kpis.docksBusy}/{kpis.docksTotal} bays busy
         </span>
       </span>
       <ChevronRight size={16} className="text-faint" />

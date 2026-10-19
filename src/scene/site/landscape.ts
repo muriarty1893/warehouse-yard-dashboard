@@ -1,4 +1,5 @@
-import { road } from '../../config/devYard';
+import { devYard, road } from '../../config/devYard';
+import { yardBounds } from '../../domain/yard';
 import { hashString, mulberry32 } from '../../domain/seed';
 import type { Rect } from '../../domain/types';
 
@@ -15,20 +16,19 @@ export interface GrassBed {
 /** Top of the raised grass beds (slab height + bevel). */
 export const GRASS_TOP = 0.26;
 
+const yb = yardBounds(devYard);
+const STRIP = 14;
+
+/** Grass strips around the yard, plus a verge south of the road. */
 export const GRASS_BEDS: GrassBed[] = [
-  { rect: { x: -17, y: -0.6, w: 16.4, h: 127 } },
-  { rect: { x: -0.4, y: 110.6, w: 177, h: 16 } },
-  { rect: { x: 160.6, y: -0.6, w: 16, h: 111 } },
-  {
-    rect: { x: 90.6, y: 60.6, w: 69.6, h: 49.6 },
-    holes: [
-      { x: 96, y: 70, w: 30, h: 22 },
-      { x: 128, y: 64, w: 29, h: 43 },
-      { x: 108, y: 61.4, w: 6, h: 9 },
-    ],
-  },
-  { rect: { x: road.x0, y: -29, w: road.x1 - road.x0, h: 12.6 } },
+  { rect: { x: yb.x0 - 0.6 - STRIP, y: yb.y0 + 0.05, w: STRIP, h: yb.h + 0.6 + STRIP } },
+  { rect: { x: yb.x0 - 0.4, y: yb.y1 + 0.6, w: yb.w + 0.8, h: STRIP } },
+  { rect: { x: yb.x1 + 0.6, y: yb.y0 + 0.05, w: STRIP, h: yb.h + 0.6 + STRIP } },
+  { rect: { x: road.x0, y: road.y0 - 13, w: road.x1 - road.x0, h: 12.6 } },
 ];
+
+/** x-range around the yard that gets detailed planting. */
+export const NEAR: [number, number] = [yb.x0 - 70, yb.x1 + 70];
 
 export interface Spot {
   x: number;
@@ -60,18 +60,14 @@ export function treeSpots(): Spot[] {
   const col = (y0: number, y1: number, x: number, step: number) => {
     for (let y = y0; y <= y1; y += step) if (rng() > 0.12) add(jitter(x, 2.5), jitter(y, 3));
   };
-  row(-160, 320, -21, 10);
-  row(-150, 310, -26.5, 15);
-  col(4, 120, -5, 11);
-  col(10, 116, -12.5, 14);
-  row(-4, 172, 115.5, 10);
-  row(4, 168, 122, 15);
-  col(6, 104, 165.5, 11);
-  col(12, 100, 172, 14);
-  // Around the office and car park.
-  row(94, 124, 66.5, 7);
-  col(74, 104, 93.5, 8);
-  row(96, 124, 96, 7);
+  row(NEAR[0], NEAR[1], road.y0 - 5, 10);
+  row(NEAR[0] + 5, NEAR[1] - 5, road.y0 - 10.5, 15);
+  col(yb.y0 + 4, yb.y1 + 10, yb.x0 - 5, 9);
+  col(yb.y0 + 8, yb.y1 + 10, yb.x0 - 11.5, 12);
+  row(yb.x0 - 4, yb.x1 + 4, yb.y1 + 4.5, 9);
+  row(yb.x0, yb.x1, yb.y1 + 11, 13);
+  col(yb.y0 + 4, yb.y1 + 10, yb.x1 + 5, 9);
+  col(yb.y0 + 8, yb.y1 + 10, yb.x1 + 11.5, 12);
   return spots;
 }
 

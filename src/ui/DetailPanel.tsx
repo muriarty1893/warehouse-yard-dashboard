@@ -4,6 +4,7 @@ import { hashString } from '../domain/seed';
 import { useUi, type EntityRef } from '../state/ui';
 import { useView } from '../state/view';
 import { fmtClock, fmtDuration } from '../world/time';
+import { yardBounds } from '../domain/yard';
 import { cargo as allCargo, yard } from '../world/snapshot';
 import { useWorld } from '../world/store';
 import { focusEntity, selectAndFocus } from './focus';
@@ -216,6 +217,8 @@ function Tile({ label, value, of, bar, tone = 'blue' }: { label: string; value: 
   );
 }
 
+const bounds = yardBounds(yard);
+
 function YardOverview() {
   const k = useWorld((s) => s.kpis);
   const zones = useWorld((s) => s.zones);
@@ -224,12 +227,12 @@ function YardOverview() {
   const working = forklifts.filter((f) => f.status !== 'charging' && f.status !== 'idle');
   return (
     <>
-      <Header icon={<Warehouse size={20} />} eyebrow="Logistics yard · YD-01" title={yard.name} subtitle="L-shaped · 160 × 110 m" />
-      <StatusLine tone="green" label="Operational" detail={`${k.docksBusy} docked · ${k.inbound} arriving · ${k.staged} staged`} />
+      <Header icon={<Warehouse size={20} />} eyebrow={`Logistics yard · ${yard.id}`} title={yard.name} subtitle={`${Math.round(bounds.w)} × ${Math.round(bounds.h)} m · ${zones.length} storage zones`} />
+      <StatusLine tone="green" label="Operational" detail={`${k.docksBusy} at loading · ${k.inbound} arriving · ${k.departuresToday} departed`} />
       <div className="grid grid-cols-2 gap-2 px-4 pt-3">
         <Tile label="Cargo units" value={String(k.cargo)} of={`/ ${capacity}`} bar={k.cargo / capacity} />
-        <Tile label="Dock doors" value={`${k.docksBusy}`} of={`/ ${k.docksTotal} busy`} bar={k.docksBusy / k.docksTotal} tone="green" />
-        <Tile label="Loading bays" value={`${k.baysBusy}`} of={`/ ${k.baysTotal} busy`} bar={k.baysBusy / k.baysTotal} tone="green" />
+        <Tile label="Loading spaces" value={`${k.docksBusy}`} of={`/ ${k.docksTotal} busy`} bar={k.docksTotal ? k.docksBusy / k.docksTotal : 0} tone="green" />
+        <Tile label="Forklifts" value={`${k.forkliftsWorking}`} of={`/ ${k.forkliftsTotal} working`} bar={k.forkliftsWorking / k.forkliftsTotal} tone="green" />
         <Tile label="Departures today" value={String(k.departuresToday)} of="trucks" />
       </div>
       <div className="px-4 pt-3">
@@ -243,7 +246,7 @@ function YardOverview() {
             <div key={z.id} className="flex items-center gap-2.5 border-t border-line py-[7px] text-[12.5px] first:border-t-0">
               <span className="h-6 w-6 shrink-0 rounded-md" style={{ background: `${z.color}22`, boxShadow: `inset 0 0 0 1.5px ${z.color}` }} />
               <span className="min-w-0 flex-1 leading-tight">
-                <span className="block truncate font-semibold text-ink">{z.name.replace(' · Containers', '')}</span>
+                <span className="block truncate font-semibold text-ink">{z.name}</span>
                 <span className="block text-[11px] text-muted">{z.kind}</span>
               </span>
               <span className="font-semibold text-ink tabular-nums">

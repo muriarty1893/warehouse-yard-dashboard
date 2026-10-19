@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import * as THREE from 'three';
-import type { ForkliftSpec } from '../../config/fleet';
+import { groundAt, type ForkliftSpec } from '../../config/fleet';
 import { FORKLIFT } from '../../domain/vehicles';
 import { clock } from '../../sim/clock';
 import { compileRoute, evalRoute, newPose } from '../../sim/route';
@@ -115,8 +115,14 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
     if (!root.current || !carriage.current || !loadRef.current) return;
     if (route) {
       evalRoute(route, clock.t, pose);
-      root.current.position.set(...yardToWorld(pose.x, pose.y));
+      root.current.position.set(...yardToWorld(pose.x, pose.y, groundAt(pose.x, pose.y)));
       root.current.rotation.y = pose.heading;
+      // Pitch with the floor (ramp): compare floor height ahead and behind.
+      const c = Math.cos(pose.heading);
+      const sn = Math.sin(pose.heading);
+      const ahead = groundAt(pose.x + c * 0.8, pose.y + sn * 0.8);
+      const behind = groundAt(pose.x - c * 0.8, pose.y - sn * 0.8);
+      root.current.rotation.z = Math.atan2(ahead - behind, 1.6);
       for (const w of wheels.current) w.rotation.z = -pose.odometer / (w.userData.radius as number);
       if (statusRef.current && statusRef.current.textContent !== pose.status) statusRef.current.textContent = pose.status;
     }
@@ -129,7 +135,7 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
   return (
     <group
       ref={root}
-      position={yardToWorld(p.x, p.y)}
+      position={yardToWorld(p.x, p.y, groundAt(p.x, p.y))}
       rotation={[0, p.heading, 0]}
       onPointerOver={(e) => {
         e.stopPropagation();

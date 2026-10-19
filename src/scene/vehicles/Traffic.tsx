@@ -52,22 +52,3 @@ export function Traffic() {
     </group>
   );
 }
-
-/** Parked staff cars in the office car park. */
-export function ParkedCars() {
-  const colors = ['#e9edf5', '#2f5ff0', '#8d97ad', '#1d2b5a', '#e9edf5', '#16a39b', '#d64b4b', '#e9edf5'];
-  const spots: [number, number, number][] = [];
-  for (let i = 0; i < 9; i++) {
-    if (i % 3 !== 1) spots.push([132.8, 67.4 + i * 2.8, 0]);
-    if (i % 4 !== 2) spots.push([152.2, 67.4 + i * 2.8, Math.PI]);
-  }
-  return (
-    <Merge>
-      {spots.map(([x, y, h], i) => (
-        <group key={i} position={yardToWorld(x, y)} rotation={[0, h, 0]}>
-          <Car color={colors[i % colors.length]} />
-        </group>
-      ))}
-    </Merge>
-  );
-}
