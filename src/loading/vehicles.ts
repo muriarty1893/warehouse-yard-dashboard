@@ -51,7 +51,7 @@ export const VEHICLES: Record<VehicleId, VehicleSpec> = {
     inner: { l: 7.5, w: 2.45, h: 2.65 },
     deck: 1.1,
     axles: [
-      { id: 'front', label: 'Front axle', tareKg: 5900, ratingKg: 8000 },
+      { id: 'front', label: 'Front axle', tareKg: 5900, ratingKg: 9000 },
       { id: 'rear', label: 'Rear tandem', tareKg: 5300, ratingKg: 19000 },
     ],
     statics: { kind: 'rigid', front: -1.1, rear: 4.85 },

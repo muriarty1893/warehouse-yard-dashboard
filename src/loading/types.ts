@@ -80,3 +80,56 @@ export interface AxleReport {
   cogX: number | null;
   payloadKg: number;
 }
+
+/** A unit to pack, reduced to what the packer needs. */
+export interface PackItem {
+  id: string;
+  /** Drop order on the route: 1 = first stop. */
+  stop: number;
+  l: number;
+  w: number;
+  h: number;
+  weightKg: number;
+  /** Can carry other units, and may stand on others. */
+  stackable: boolean;
+  fragile: boolean;
+  urgent: boolean;
+}
+
+/** A packed unit: min corner and as-placed extents in the box frame; `seq` is the loading order. */
+export interface Placement {
+  cargoId: string;
+  stop: number;
+  seq: number;
+  x: number;
+  y: number;
+  z: number;
+  l: number;
+  w: number;
+  h: number;
+  yaw: 0 | 90;
+  weightKg: number;
+  /** The unit it stands on. */
+  on: string | null;
+}
+
+export interface LeftOut {
+  cargoId: string;
+  reason: string;
+  /** Truck the unit is proposed for instead (overflow), if any. */
+  to: string | null;
+}
+
+export interface PackOptions {
+  seed: number;
+  /** Shuffle near-equal units in the selection and packing order. */
+  shuffle: boolean;
+  /** Orientation tried first. */
+  yawFirst: 0 | 90;
+  /** Fill from the right wall (1) or the left (-1). */
+  side: 1 | -1;
+  /** Random spread (±) applied to the placement score weights. */
+  jitter: number;
+  /** Space kept clear at the front wall (m); null tries a few and keeps the best. */
+  clearance: number | null;
+}
