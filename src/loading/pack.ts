@@ -52,7 +52,8 @@ const apart = (a: Omit<Box, 'item' | 'on' | 'yaw'>, b: Box) =>
 
 const yOverlap = (a: { y: number; w: number }, b: { y: number; w: number }) => a.y < b.y + b.w - EPS && b.y < a.y + a.w - EPS;
 
-function tooBig(v: VehicleSpec, it: PackItem): string | null {
+/** Why a unit can never fit this vehicle, even turned (it is never tipped). */
+export function tooBig(v: VehicleSpec, it: Pick<PackItem, 'l' | 'w' | 'h'>): string | null {
   const { l, w, h } = v.inner;
   if (it.h > h + EPS) return `Too big for this vehicle (h ${it.h} m > ${h} m)`;
   const fits = (it.l <= l + EPS && it.w <= w + EPS) || (it.w <= l + EPS && it.l <= w + EPS);

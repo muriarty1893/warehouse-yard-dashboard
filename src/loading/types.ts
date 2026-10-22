@@ -133,3 +133,58 @@ export interface PackOptions {
   /** Space kept clear at the front wall (m); null tries a few and keeps the best. */
   clearance: number | null;
 }
+
+/** One ≈1.2 m slice of the box, front wall first. */
+export interface RowStat {
+  index: number;
+  x0: number;
+  x1: number;
+  fillPct: number;
+  kg: number;
+  /** Heaviest unit in the row. */
+  topId: string | null;
+}
+
+export interface PlanStats {
+  units: number;
+  /** Route units considered, including the ones that can never go (blocked). */
+  candidates: number;
+  weightKg: number;
+  remainingKg: number;
+  volumePct: number;
+  weightPct: number;
+  rowsUsed: number;
+  rows: number;
+  /** What stops more going on: an axle, "floor space" or "payload". */
+  limitedBy: string;
+}
+
+export interface LoadPlan {
+  vehicle: VehicleId;
+  route: string[];
+  placements: Placement[];
+  leftOut: LeftOut[];
+  checks: AxleReport;
+  rows: RowStat[];
+  stats: PlanStats;
+  /** Space left clear at the front wall (m). */
+  clearance: number;
+  seed: number;
+  tried: number;
+  ms: number;
+  /** Hash of route + vehicle + overrides; per-unit fingerprints of the goods and of the yard spot. */
+  inputsHash: number;
+  units: Record<string, { goods: number; spot: number }>;
+}
+
+export interface TruckPlanInput {
+  truckId: string;
+  route: string[];
+  vehicle: VehicleId;
+  include: { cargoId: string; stop: number }[];
+  exclude: string[];
+  urgent: string[];
+}
+
+/** A plan straight from the packer, before hashing and search stats. */
+export type PlanCore = Omit<LoadPlan, 'inputsHash' | 'units' | 'tried' | 'ms'>;
