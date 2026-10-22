@@ -79,7 +79,7 @@ export function Minimap() {
       drawStatic(ctx);
       const { cargo } = useInventory.getState();
       ctx.fillStyle = '#c9a227';
-      for (const c of cargo) if (!c.on) ctx.fillRect(X(c.x) - 1.2, Y(c.y) - 1.2, 2.4, 2.4);
+      for (const c of cargo) if (!c.on && !c.loadedOn) ctx.fillRect(X(c.x) - 1.2, Y(c.y) - 1.2, 2.4, 2.4);
       const w = useWorld.getState();
       const sel = useUi.getState().selected;
       for (const t of w.trucks) {

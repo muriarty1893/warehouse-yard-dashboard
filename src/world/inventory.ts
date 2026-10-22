@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { devYard } from '../config/devYard';
-import { hashString, seedDocuments } from '../domain/seed';
+import { hashString, isFragileGoods, seedDocuments } from '../domain/seed';
 import type { Cargo, CargoEvent, CargoEventKind, SourceDocument, Spot } from '../domain/types';
 import { clock } from '../sim/clock';
 import { demoCargo, type FillLevel } from './demo';
-import { checkSpot, hasOnTop, locationOf } from './placement';
+import { checkSpot, hasOnTop, inYard, locationOf } from './placement';
 import { fmtClock } from './time';
 
 /**
@@ -34,6 +34,8 @@ interface Saved {
   events: CargoEvent[];
   cargoSerial: number;
   docSerial: number;
+  /** Bumped when the whole inventory is replaced (reset, new day), so other stores can start over. */
+  epoch: number;
 }
 
 interface InventoryState extends Saved {
@@ -44,6 +46,11 @@ interface InventoryState extends Saved {
   /** New simulated day: fresh demo cargo at this workload; hand-made records stay. */
   newDay: (fill?: FillLevel) => void;
   release: (id: string) => Result;
+  /** Put a unit on a truck: it leaves yard storage (spec §3.1). */
+  loadOnto: (cargoId: string, truckId: string, stop: number, where: string) => Result;
+  /** Units leave the yard with their truck; returns how many. */
+  dispatch: (truckId: string) => number;
+  logPlanned: (ids: string[], truckId: string, stopLabel: (id: string) => string) => void;
   saveDocument: (input: DocumentInput) => SourceDocument;
   removeDocument: (id: string) => void;
   reset: () => void;
@@ -51,10 +58,18 @@ interface InventoryState extends Saved {
 
 const serialOf = (cargo: Cargo[]) => Math.max(18400, ...cargo.map((c) => Number(c.id.match(/^CARGO-(\d+)$/)?.[1] ?? 0)));
 
-function initial(fill: FillLevel = 'normal', day = 1): Saved {
+function initial(fill: FillLevel = 'normal', day = 1, epoch = 0): Saved {
   const cargo = demoCargo(fill, day);
   const documents = seedDocuments(cargo);
-  return { layout: LAYOUT, day, fill, cargo, documents, events: [], cargoSerial: serialOf(cargo), docSerial: 1001 + cargo.length };
+  return { layout: LAYOUT, day, fill, cargo, documents, events: [], cargoSerial: serialOf(cargo), docSerial: 1001 + cargo.length, epoch };
+}
+
+/** Saved data from before version 3: keep every record, flag fragile demo goods. */
+export function migrateInventory(saved: unknown, from: number): Saved {
+  const data = saved as Saved;
+  if (from >= 3) return data;
+  const cargo = (data.cargo ?? []).map((c) => (c.source !== 'manual' && c.fragile === undefined && isFragileGoods(c.description) ? { ...c, fragile: true } : c));
+  return { ...data, cargo, epoch: data.epoch ?? 0 };
 }
 
 let eventSeq = 0;
@@ -140,6 +155,7 @@ export const useInventory = create<InventoryState>()(
         const s = get();
         const item = s.cargo.find((c) => c.id === id);
         if (!item) return { ok: false, reason: 'Unknown cargo' };
+        if (!inYard(item)) return { ok: false, reason: `Loaded on ${item.loadedOn?.truckId}` };
         if (hasOnTop(s.cargo, id)) return { ok: false, reason: 'Move the unit on top first' };
         const check = checkSpot(s.cargo, item, spot);
         if (!check.ok) return { ok: false, reason: check.reason ?? 'Cannot place here' };
@@ -163,6 +179,36 @@ export const useInventory = create<InventoryState>()(
         return { ok: true };
       },
 
+      loadOnto: (cargoId, truckId, stop, where) => {
+        const s = get();
+        const item = s.cargo.find((c) => c.id === cargoId);
+        if (!item) return { ok: false, reason: 'Unknown cargo' };
+        if (!inYard(item)) return { ok: false, reason: `Already on ${item.loadedOn?.truckId}` };
+        if (hasOnTop(s.cargo, cargoId)) return { ok: false, reason: 'Move the unit on top first' };
+        set({
+          cargo: s.cargo.map((c) => (c.id === cargoId ? { ...c, loadedOn: { truckId, stop }, areaId: null, on: null } : c)),
+          events: [...s.events, event(cargoId, 'loaded', `Loaded onto ${truckId} at ${where}`)],
+        });
+        return { ok: true };
+      },
+
+      dispatch: (truckId) => {
+        const s = get();
+        const leaving = s.cargo.filter((c) => c.loadedOn?.truckId === truckId);
+        if (!leaving.length) return 0;
+        const gone = new Set(leaving.map((c) => c.id));
+        set({
+          cargo: s.cargo.filter((c) => !gone.has(c.id)),
+          events: [...s.events, ...leaving.map((c) => event(c.id, 'released', `Left the yard on ${truckId}`))],
+        });
+        return leaving.length;
+      },
+
+      logPlanned: (ids, truckId, stopLabel) => {
+        if (!ids.length) return;
+        set({ events: [...get().events, ...ids.map((id) => event(id, 'planned', `Planned for ${truckId} · ${stopLabel(id)}`))] });
+      },
+
       newDay: (fill) => {
         const s = get();
         const level = fill ?? s.fill;
@@ -183,7 +229,7 @@ export const useInventory = create<InventoryState>()(
         const cargo = demoCargo(level, day, kept);
         const fresh = cargo.filter((c) => !keep.has(c.id));
         const documents = [...s.documents.filter((d) => keep.has(d.cargoId) || !index.has(d.cargoId)), ...seedDocuments(fresh).map((d, i) => ({ ...d, id: `DOC-${String(s.docSerial + 1 + i).padStart(5, '0')}` }))];
-        set({ day, fill: level, cargo, documents, cargoSerial: Math.max(s.cargoSerial, serialOf(cargo)), docSerial: s.docSerial + fresh.length + 1 });
+        set({ day, fill: level, cargo, documents, cargoSerial: Math.max(s.cargoSerial, serialOf(cargo)), docSerial: s.docSerial + fresh.length + 1, epoch: s.epoch + 1 });
       },
 
       saveDocument: (input) => {
@@ -219,13 +265,14 @@ export const useInventory = create<InventoryState>()(
         });
       },
 
-      reset: () => set(initial(get().fill)),
+      reset: () => set(initial(get().fill, 1, get().epoch + 1)),
     }),
     {
       name: 'docktor.inventory',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => safeStorage),
-      partialize: (s): Saved => ({ layout: s.layout, day: s.day, fill: s.fill, cargo: s.cargo, documents: s.documents, events: s.events, cargoSerial: s.cargoSerial, docSerial: s.docSerial }),
+      migrate: migrateInventory,
+      partialize: (s): Saved => ({ layout: s.layout, day: s.day, fill: s.fill, cargo: s.cargo, documents: s.documents, events: s.events, cargoSerial: s.cargoSerial, docSerial: s.docSerial, epoch: s.epoch }),
       merge: (saved, current) => {
         const data = saved as Partial<Saved> | undefined;
         if (!data || data.layout !== LAYOUT || !Array.isArray(data.cargo)) return current;

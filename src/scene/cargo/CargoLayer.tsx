@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useUi } from '../../state/ui';
 import { placeAt } from '../../ui/actions';
 import { labelledCargo, useInventory } from '../../world/inventory';
+import { inYard } from '../../world/placement';
 import { Brackets, Pin, Tag } from '../markers';
 import { unitBox, yardToWorld } from '../kit';
 import { buildCargoPrims, makePrimAssets, type CargoBounds, type Prim, type PrimKind } from './cargoPrims';
@@ -100,7 +101,8 @@ export function stackTopOf(cargo: { id: string; on: string | null }[], id: strin
 }
 
 export function CargoLayer() {
-  const cargo = useInventory((s) => s.cargo);
+  const all = useInventory((s) => s.cargo);
+  const cargo = useMemo(() => all.filter(inYard), [all]);
   const documents = useInventory((s) => s.documents);
   const labelled = useMemo(() => labelledCargo(documents), [documents]);
   const assets = useMemo(makePrimAssets, []);

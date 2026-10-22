@@ -197,6 +197,10 @@ export interface Cargo {
   brand?: string;
   /** Show a location pin above this cargo. */
   pinned?: boolean;
+  /** Nothing may be stacked on it (in the yard or in a truck). */
+  fragile?: boolean;
+  /** In a truck, not in yard storage: which truck and which stop it drops at. */
+  loadedOn?: { truckId: string; stop: number } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +243,7 @@ export interface SourceDocument {
   updatedAt: number;
 }
 
-export type CargoEventKind = 'registered' | 'moved' | 'edited' | 'released' | 'document';
+export type CargoEventKind = 'registered' | 'moved' | 'edited' | 'released' | 'document' | 'planned' | 'loaded';
 
 export interface CargoEvent {
   id: string;

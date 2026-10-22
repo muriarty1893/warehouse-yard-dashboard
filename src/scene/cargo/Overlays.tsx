@@ -8,7 +8,7 @@ import { heightAt } from '../../domain/yard';
 import { useLayers, type Overlay } from '../../state/layers';
 import { useInventory } from '../../world/inventory';
 import { useWorld } from '../../world/store';
-import { stackOf } from '../../world/placement';
+import { inYard, stackOf } from '../../world/placement';
 import { unitBox, yardToWorld } from '../kit';
 
 /**
@@ -51,7 +51,7 @@ function Halos({ overlay }: { overlay: Overlay }) {
   const cargo = useInventory((s) => s.cargo);
   const documents = useInventory((s) => s.documents);
   const ref = useRef<THREE.InstancedMesh>(null);
-  const floor = useMemo(() => cargo.filter((c) => !c.on), [cargo]);
+  const floor = useMemo(() => cargo.filter((c) => !c.on && inYard(c)), [cargo]);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false }), []);
   useLayoutEffect(() => {
     const mesh = ref.current;

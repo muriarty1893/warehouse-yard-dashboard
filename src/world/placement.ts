@@ -65,6 +65,9 @@ export function stackOf(cargo: Cargo[], baseId: string): Cargo[] {
 
 export const hasOnTop = (cargo: Cargo[], id: string) => cargo.some((c) => c.on === id);
 
+/** Still in the yard (not loaded onto a truck). */
+export const inYard = (c: Cargo) => !c.loadedOn;
+
 /** Height of a unit's base above the yard floor (0 at ground, platform 1.2, + units below). */
 export function baseHeight(cargo: Cargo[], item: Cargo, index = byId(cargo)) {
   let z = heightAt(devYard, item.x, item.y);
@@ -78,7 +81,8 @@ export function baseHeight(cargo: Cargo[], item: Cargo, index = byId(cargo)) {
 
 const solidBuildings = devYard.buildings.filter((b) => b.kind !== 'canopy').map((b) => ({ b, obb: rectObb(b.rect) }));
 
-export function checkFloor(cargo: Cargo[], item: Placeable, x: number, y: number, yaw: number): PlaceCheck {
+export function checkFloor(all: Cargo[], item: Placeable, x: number, y: number, yaw: number): PlaceCheck {
+  const cargo = all.filter(inYard);
   const fp = footprint(item.dims, x, y, yaw);
   const fail = (reason: string): PlaceCheck => ({ ok: false, reason, x, y, yaw, z: 0, level: 0, areaId: null, on: null });
   const corners = obbCorners(fp);
@@ -97,7 +101,8 @@ export function checkFloor(cargo: Cargo[], item: Placeable, x: number, y: number
   return { ok: true, warn: area ? undefined : 'Outside the storage areas', x, y, yaw, z, level: 0, areaId: area?.id ?? null, on: null };
 }
 
-export function checkStack(cargo: Cargo[], item: Placeable, onId: string): PlaceCheck {
+export function checkStack(all: Cargo[], item: Placeable, onId: string): PlaceCheck {
+  const cargo = all.filter(inYard);
   const index = byId(cargo);
   const below = index.get(onId);
   const fail = (reason: string): PlaceCheck => ({ ok: false, reason, x: below?.x ?? 0, y: below?.y ?? 0, yaw: below?.yaw ?? 0, z: 0, level: 0, areaId: null, on: onId });
@@ -105,7 +110,7 @@ export function checkStack(cargo: Cargo[], item: Placeable, onId: string): Place
   if (below.id === item.id) return fail('Cannot stack a unit on itself');
   if (cargo.some((c) => c.on === below.id && c.id !== item.id)) return fail(`Something is already on ${below.id}`);
   if (item.id && stackBase(cargo, below, index).base.id === item.id) return fail('Cannot stack a unit on itself');
-  if (!isStackable(below.look)) return fail(`Nothing can go on top of ${below.id}`);
+  if (!isStackable(below.look) || below.fragile) return fail(`Nothing can go on top of ${below.id}`);
   if (!isStackable(item.look)) return fail('This unit must stand on the floor');
   const level = stackBase(cargo, below, index).level + 1;
   const area = below.areaId ? devYard.storage.find((a) => a.id === below.areaId) : undefined;
@@ -160,6 +165,7 @@ export function recommendSpot(cargo: Cargo[], item: Placeable): (Spot & { label:
 
 /** Human-readable location of a unit: "Open yard · C3" (+ "on CARGO-…" when stacked). */
 export function locationOf(item: Cargo) {
+  if (item.loadedOn) return item.loadedOn.truckId;
   const area = item.areaId ? devYard.storage.find((a) => a.id === item.areaId) : areaAt(devYard, item.x, item.y);
   const ref = gridRef(devYard, item.x, item.y);
   return `${area?.name ?? 'Yard floor'} · ${ref}`;

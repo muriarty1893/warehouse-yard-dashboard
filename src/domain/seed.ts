@@ -132,8 +132,13 @@ export function makeUnit(rng: Rng, id: string, look: UnitLook, opts: { destinati
     return { id, type: 'group', look, description: opts.description ?? 'Box group', destination, weightKg: 800, dims: { l: 1.7, w: 1.5, h: 0.42 } };
   }
   const spec = LOOKS[look];
-  return { id, type: spec.type, look, description: opts.description ?? spec.describe(rng), destination, weightKg: spec.weight(rng), dims: spec.dims(rng) };
+  const description = opts.description ?? spec.describe(rng);
+  return { id, type: spec.type, look, description, destination, weightKg: spec.weight(rng), dims: spec.dims(rng), ...(isFragileGoods(description) ? { fragile: true } : {}) };
 }
+
+/** Goods that must not carry a load on top (seeded as fragile). */
+export const FRAGILE_GOODS = ['LED Panel 60×60', 'Ceramic Tiles', 'Kitchen Appliances'];
+export const isFragileGoods = (description: string) => FRAGILE_GOODS.includes(description);
 
 export { DESTINATIONS, pick, weighted };
 export type { Rng };

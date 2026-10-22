@@ -10,6 +10,7 @@ import { compileRoute, evalRoute, newPose, type CompiledRoute, type RoutePose } 
 import type { EntityRef } from '../state/ui';
 import type { Overlay } from '../state/layers';
 import { labelledCargo, useInventory } from './inventory';
+import { inYard } from './placement';
 import { fmtClock, fmtDuration } from './time';
 
 /**
@@ -453,7 +454,7 @@ function forkliftState(m: (typeof forkliftModels)[number], t: number): ForkliftS
           ? `Loading ${truck} at ${bay}`
           : 'Returning to pick';
   const pick = spec.pick;
-  const near = pick ? currentCargo().filter((c) => Math.hypot(c.x - pick[0], c.y - pick[1]) < 1) : [];
+  const near = pick ? currentCargo().filter((c) => inYard(c) && Math.hypot(c.x - pick[0], c.y - pick[1]) < 1) : [];
   const top = near.find((c) => !near.some((o) => o.on === c.id));
   return {
     ...common,
@@ -493,7 +494,8 @@ function areaStates(cargo: Cargo[]): AreaState[] {
 }
 
 export function computeSnapshot(t: number): WorldSnapshot {
-  const { cargo, documents, events } = useInventory.getState();
+  const { cargo: all, documents, events } = useInventory.getState();
+  const cargo = all.filter(inYard);
   const areas = areaStates(cargo);
   const truckStates = truckModels.map((m) => truckState(m, t));
   const forkliftStates = forkliftModels.map((m) => forkliftState(m, t));

@@ -12,6 +12,10 @@ export function focusEntity(ref: EntityRef) {
     const cargo = useInventory.getState().cargo;
     const c = cargo.find((item) => item.id === ref.id);
     if (!c) return;
+    if (c.loadedOn) {
+      focusEntity({ kind: 'truck', id: c.loadedOn.truckId });
+      return;
+    }
     useView.getState().send({ kind: 'focus', x: c.x, y: c.y, h: baseHeight(cargo, c) + c.dims.h / 2, distance: 22 });
     return;
   }
