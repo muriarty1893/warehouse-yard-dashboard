@@ -17,7 +17,7 @@ import { fmtClock } from './time';
 export const CURRENT_USER = 'Deniz Kaya';
 
 /** Saved data is only reused when the yard layout is unchanged. */
-const LAYOUT = hashString(JSON.stringify([devYard.storage, devYard.bays, devYard.fixtures, devYard.buildings]));
+export const LAYOUT = hashString(JSON.stringify([devYard.storage, devYard.bays, devYard.fixtures, devYard.buildings]));
 
 export type Result = { ok: true } | { ok: false; reason: string };
 export type CargoInput = Omit<Cargo, 'x' | 'y' | 'yaw' | 'on' | 'areaId' | 'pinned' | 'source'>;
@@ -51,6 +51,8 @@ interface InventoryState extends Saved {
   /** Units leave the yard with their truck; returns how many. */
   dispatch: (truckId: string) => number;
   logPlanned: (ids: string[], truckId: string, stopLabel: (id: string) => string) => void;
+  /** A planning note in a unit's history (e.g. a plan kept despite a change). */
+  logNote: (cargoId: string, text: string) => void;
   saveDocument: (input: DocumentInput) => SourceDocument;
   removeDocument: (id: string) => void;
   reset: () => void;
@@ -91,7 +93,7 @@ const DOC_LABEL: Record<SourceDocument['type'], string> = {
 /** Save failures (quota, private mode) without feeding back into the persisted store. */
 export const useSaveStatus = create<{ error: string | null }>(() => ({ error: null }));
 
-const safeStorage: StateStorage = {
+export const safeStorage: StateStorage = {
   getItem: (key) => {
     try {
       return localStorage.getItem(key);
@@ -208,6 +210,8 @@ export const useInventory = create<InventoryState>()(
         if (!ids.length) return;
         set({ events: [...get().events, ...ids.map((id) => event(id, 'planned', `Planned for ${truckId} · ${stopLabel(id)}`))] });
       },
+
+      logNote: (cargoId, text) => set({ events: [...get().events, event(cargoId, 'planned', text)] }),
 
       newDay: (fill) => {
         const s = get();
