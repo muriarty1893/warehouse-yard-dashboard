@@ -8,8 +8,13 @@ export interface EntityRef {
   id: string;
 }
 
-/** Modal forms: a source document, registering / editing a cargo unit. */
-export type Dialog = { kind: 'document'; cargoId: string; docId?: string } | { kind: 'cargo'; cargoId?: string; draft?: RegisterDraft } | null;
+/** Modal forms: a source document, registering / editing a cargo unit, the load planner's urgent unit and confirm-anyway prompt. */
+export type Dialog =
+  | { kind: 'document'; cargoId: string; docId?: string }
+  | { kind: 'cargo'; cargoId?: string; draft?: RegisterDraft }
+  | { kind: 'urgent'; truckId: string }
+  | { kind: 'confirm'; truckId: string }
+  | null;
 
 /** A cargo unit filled in on the register form, waiting to be put down on the map. */
 export interface RegisterDraft {

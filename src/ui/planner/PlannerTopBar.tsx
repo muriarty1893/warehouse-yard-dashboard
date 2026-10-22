@@ -1,8 +1,14 @@
-import { Truck, X } from 'lucide-react';
+import { CheckCircle2, Flame, Sparkles, Truck, Undo2, X } from 'lucide-react';
+import { useState } from 'react';
+import { candidatesFor } from '../../loading/candidates';
 import { bayOfTruck } from '../../loading/frame';
-import { useLoading } from '../../loading/store';
+import { optimiseInWorker } from '../../loading/optimise';
+import { planOf, useLoading } from '../../loading/store';
+import { vehicleById } from '../../loading/vehicles';
+import { useUi } from '../../state/ui';
 import { useView, type PlannerView } from '../../state/view';
-import { IconButton, Segmented } from '../kit';
+import { useInventory } from '../../world/inventory';
+import { Button, IconButton, Segmented } from '../kit';
 import { Logo, TimeControls } from '../TopBar';
 
 const VIEWS: { value: PlannerView; label: string }[] = [
@@ -11,6 +17,62 @@ const VIEWS: { value: PlannerView; label: string }[] = [
   { value: 'top', label: 'Top' },
   { value: 'plan', label: 'Plan' },
 ];
+
+/** Best of ~1,000 seeded layouts for this truck, off the main thread (spec §1.6). */
+async function optimiseTruck(truckId: string) {
+  const s = useLoading.getState();
+  const t = s.trucks[truckId];
+  if (!t) return;
+  const others = new Set(Object.keys(s.trucks).filter((id) => id !== truckId).flatMap((id) => planOf(s, id)?.placements.map((p) => p.cargoId) ?? []));
+  const { items } = candidatesFor({ truckId, route: t.route, vehicle: t.vehicle, include: t.include, exclude: t.exclude, urgent: t.urgent }, useInventory.getState().cargo, others);
+  const r = await optimiseInWorker({ vehicle: vehicleById(t.vehicle), items, route: t.route });
+  useLoading.getState().applyOptimised(truckId, r.plan, r.tried, Math.round(r.ms));
+  useUi.getState().notify(`${r.tried.toLocaleString('en-US')} layouts in ${Math.round(r.ms)} ms · best kept`);
+}
+
+function Actions({ truckId }: { truckId: string }) {
+  const status = useLoading((s) => s.trucks[truckId]?.status);
+  const plan = useLoading((s) => planOf(s, truckId));
+  const [busy, setBusy] = useState(false);
+  const notify = useUi((s) => s.notify);
+  const openDialog = useUi((s) => s.openDialog);
+  if (!plan) return null;
+  const confirm = () => {
+    if (!plan.checks.ok) return openDialog({ kind: 'confirm', truckId });
+    const r = useLoading.getState().confirm(truckId);
+    notify(r.ok ? `Plan for ${truckId} confirmed · ${plan.placements.length} units` : r.reason, r.ok ? 'ok' : 'error');
+  };
+  return (
+    <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl bg-white/90 p-1 shadow-[0_2px_8px_rgba(27,42,74,0.04)]">
+      {status === 'draft' && (
+        <>
+          <Button tone="ghost" onClick={() => openDialog({ kind: 'urgent', truckId })} title="Put a yard unit on this truck first">
+            <Flame size={15} /> Urgent unit
+          </Button>
+          <Button
+            tone="ghost"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              optimiseTruck(truckId).finally(() => setBusy(false));
+            }}
+            title="Try ~1,000 layouts and keep the best"
+          >
+            <Sparkles size={15} /> {busy ? 'Optimising…' : 'Optimise'}
+          </Button>
+          <Button tone="primary" disabled={!plan.placements.length} onClick={confirm} title={plan.placements.length ? 'Accept this plan' : 'No cargo for this route'}>
+            <CheckCircle2 size={15} /> Confirm plan
+          </Button>
+        </>
+      )}
+      {status === 'confirmed' && (
+        <Button onClick={() => useLoading.getState().reopen(truckId)} title="Back to a draft you can change">
+          <Undo2 size={15} /> Re-open
+        </Button>
+      )}
+    </div>
+  );
+}
 
 /** Planner header: which truck, sim time, view switch and the plan's actions. */
 export function PlannerTopBar({ truckId }: { truckId: string }) {
@@ -38,6 +100,7 @@ export function PlannerTopBar({ truckId }: { truckId: string }) {
       <div className="pointer-events-auto w-[240px]">
         <Segmented value={view} options={VIEWS} onChange={setView} />
       </div>
+      <Actions truckId={truckId} />
       <div className="pointer-events-auto rounded-xl bg-white/90">
         <IconButton title="Close the planner (Esc)" onClick={close}>
           <X size={18} />

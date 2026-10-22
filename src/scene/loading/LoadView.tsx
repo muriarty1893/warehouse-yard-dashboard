@@ -1,10 +1,14 @@
 import { Html } from '@react-three/drei';
+import { useFrame, useThree } from '@react-three/fiber';
+import { useEffect, useMemo } from 'react';
+import * as THREE from 'three';
 import type { Pose } from '../../domain/types';
-import { bayOfTruck, boxToLocal, truckPoseFor } from '../../loading/frame';
+import { bayOfTruck, boxToLocal, boxToYard, truckPoseFor } from '../../loading/frame';
 import { planOf, useLoading } from '../../loading/store';
 import type { AxleId, LoadPlan, VehicleSpec } from '../../loading/types';
 import { vehicleById } from '../../loading/vehicles';
 import { useView } from '../../state/view';
+import { freeArea, rowAnchors } from '../../ui/planner/anchors';
 import { fmtT } from '../../ui/planner/format';
 import { useInventory } from '../../world/inventory';
 import { yardToWorld } from '../kit';
@@ -42,17 +46,61 @@ function AxleChips({ plan, v, pose }: { plan: LoadPlan; v: VehicleSpec; pose: Po
   );
 }
 
+/** Screen position of the top of each row, for the row cards; only recomputed when the camera or plan moves. */
+function RowAnchors({ plan, v, pose }: { plan: LoadPlan; v: VehicleSpec; pose: Pose }) {
+  const seen = useMemo(() => ({ m: new THREE.Matrix4(), p: new THREE.Matrix4(), plan: null as LoadPlan | null, w: 0, h: 0 }), []);
+  const tmp = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera, size }) => {
+    if (seen.plan === plan && seen.m.equals(camera.matrixWorld) && seen.p.equals(camera.projectionMatrix) && seen.w === size.width && seen.h === size.height) return;
+    seen.plan = plan;
+    seen.m.copy(camera.matrixWorld);
+    seen.p.copy(camera.projectionMatrix);
+    seen.w = size.width;
+    seen.h = size.height;
+    rowAnchors.points = plan.rows.map((r) => {
+      const [x, y] = boxToYard(pose, v, (r.x0 + r.x1) / 2, v.inner.w / 2);
+      tmp.set(...yardToWorld(x, y, v.deck + v.inner.h + 0.35)).project(camera);
+      return { x: ((tmp.x + 1) / 2) * size.width, y: ((1 - tmp.y) / 2) * size.height, visible: tmp.z < 1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05 };
+    });
+    rowAnchors.version += 1;
+  });
+  return null;
+}
+
+/** Keep the truck in the middle of the space the planner panels leave free, not the middle of the window. */
+function Viewport() {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
+  const size = useThree((s) => s.size);
+  useEffect(() => {
+    const apply = () => {
+      const a = freeArea();
+      const cx = (a.left + a.right) / 2;
+      const cy = (a.top + a.bottom) / 2;
+      camera.setViewOffset(size.width, size.height, size.width / 2 - cx, size.height / 2 - cy, size.width, size.height);
+    };
+    // The panels mount alongside this one; measure once they are laid out.
+    const id = window.setTimeout(apply, 60);
+    return () => {
+      window.clearTimeout(id);
+      camera.clearViewOffset();
+    };
+  }, [camera, size]);
+  return null;
+}
+
 function PlannedLoad({ truckId }: { truckId: string }) {
   const plan = useLoading((s) => planOf(s, truckId));
   const cargo = useInventory((s) => s.cargo);
-  const bay = bayOfTruck(truckId);
-  if (!plan || !bay) return null;
-  const v = vehicleById(plan.vehicle);
-  const pose = truckPoseFor(bay, v);
+  const vehicle = plan?.vehicle;
+  const bay = useMemo(() => bayOfTruck(truckId), [truckId]);
+  const v = vehicle ? vehicleById(vehicle) : null;
+  const pose = useMemo(() => (bay && v ? truckPoseFor(bay, v) : null), [bay, v]);
+  if (!plan || !v || !pose) return null;
   return (
     <>
       <PackedUnits plan={plan} v={v} pose={pose} truckId={truckId} cargo={cargo} />
       <AxleChips plan={plan} v={v} pose={pose} />
+      <RowAnchors plan={plan} v={v} pose={pose} />
     </>
   );
 }
@@ -61,7 +109,12 @@ function PlannedLoad({ truckId }: { truckId: string }) {
 export function LoadView() {
   const planner = useView((s) => s.planner);
   if (!planner) return null;
-  return <PlannedLoad truckId={planner.truckId} />;
+  return (
+    <>
+      <Viewport />
+      <PlannedLoad truckId={planner.truckId} />
+    </>
+  );
 }
 
 /** The vehicle a truck is drawn as while its plan is open (the plan's, else the chosen one). */

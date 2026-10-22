@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LeftOut } from '../../loading/types';
-import { fmtYardTime, isBlocked, overflowNote, worstStatus } from './notes';
+import { demoCargo } from '../../world/demo';
+import { filterRows, fmtYardTime, isBlocked, overflowNote, planRows, worstStatus } from './notes';
 
 const out = (cargoId: string, reason: string, to: string | null = null): LeftOut => ({ cargoId, reason, to });
 
@@ -28,5 +29,42 @@ describe('planner notes', () => {
   it('formats yard seconds as a clock, past midnight too', () => {
     expect(fmtYardTime(9 * 3600 + 5 * 60)).toBe('09:05');
     expect(fmtYardTime(25 * 3600 + 30 * 60)).toBe('01:30');
+  });
+});
+
+describe('cargo table rows', () => {
+  const base = demoCargo('normal', 1).filter((c) => !c.on && c.look !== 'container');
+  const [a, b, c, d, e] = base;
+  const cargo = [{ ...a, fragile: false, loadedOn: { truckId: 'TRUCK-102', stop: 1 } }, { ...b, fragile: false }, { ...c, fragile: true }, { ...d, fragile: false }, { ...e, fragile: false }];
+  const placement = (cargoId: string, seq: number, stop: number) => ({ cargoId, seq, stop, x: 0, y: 0, z: 0, l: 1, w: 1, h: 1, yaw: 0 as const, weightKg: 100, on: null });
+  const plan = {
+    placements: [placement(a.id, 1, 1), placement(b.id, 2, 2)],
+    leftOut: [out(c.id, 'No floor space left', 'TRUCK-110'), out(d.id, 'Under CARGO-1 — move it first')],
+    route: ['Eskişehir', 'Ankara'],
+  };
+  const truck = { truckId: 'TRUCK-102', exclude: [e.id], urgent: [b.id], include: [] as { cargoId: string; stop: number }[], route: plan.route };
+
+  it('gives every route unit its status', () => {
+    const rows = planRows(truck, plan, cargo);
+    expect(rows.map((r) => [r.id, r.status])).toEqual([
+      [a.id, 'loaded'],
+      [b.id, 'planned'],
+      [c.id, 'overflow'],
+      [d.id, 'left'],
+      [e.id, 'excluded'],
+    ]);
+    expect(rows[1].urgent).toBe(true);
+    expect(rows[1].stop).toBe(2);
+    expect(rows[2].to).toBe('TRUCK-110');
+    expect(rows[3].reason).toBe('Under CARGO-1 — move it first');
+    expect(rows[2].fragile).toBe(true);
+  });
+
+  it('filters by tab and search', () => {
+    const rows = planRows(truck, plan, cargo);
+    expect(filterRows(rows, 'truck', '').map((r) => r.id)).toEqual([a.id, b.id]);
+    expect(filterRows(rows, 'overflow', '').map((r) => r.id)).toEqual([c.id]);
+    expect(filterRows(rows, 'fragile', '').map((r) => r.id)).toEqual([c.id]);
+    expect(filterRows(rows, 'all', b.id.toLowerCase()).map((r) => r.id)).toEqual([b.id]);
   });
 });

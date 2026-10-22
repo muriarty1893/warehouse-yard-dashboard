@@ -3,6 +3,8 @@ import { useEffect, type ReactNode } from 'react';
 import { useUi } from '../state/ui';
 import { CargoForm } from './CargoForm';
 import { DocumentForm } from './DocumentForm';
+import { ConfirmPrompt } from './planner/ConfirmPrompt';
+import { UrgentPicker } from './planner/UrgentPicker';
 import { Card, IconButton } from './kit';
 
 /** Modal shell: backdrop, title bar, Esc to close. */
@@ -39,5 +41,14 @@ export function Modal({ title, subtitle, onClose, children, width = 560 }: { tit
 export function Dialogs() {
   const dialog = useUi((s) => s.dialog);
   if (!dialog) return null;
-  return dialog.kind === 'document' ? <DocumentForm key={`${dialog.cargoId}|${dialog.docId}`} cargoId={dialog.cargoId} docId={dialog.docId} /> : <CargoForm key={dialog.cargoId ?? 'new'} cargoId={dialog.cargoId} draft={dialog.draft} />;
+  switch (dialog.kind) {
+    case 'document':
+      return <DocumentForm key={`${dialog.cargoId}|${dialog.docId}`} cargoId={dialog.cargoId} docId={dialog.docId} />;
+    case 'cargo':
+      return <CargoForm key={dialog.cargoId ?? 'new'} cargoId={dialog.cargoId} draft={dialog.draft} />;
+    case 'urgent':
+      return <UrgentPicker truckId={dialog.truckId} />;
+    case 'confirm':
+      return <ConfirmPrompt truckId={dialog.truckId} />;
+  }
 }
