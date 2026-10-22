@@ -1,4 +1,6 @@
-import { CalendarDays, Forklift, HardHat, Pause, Play, RotateCcw, Truck, Warehouse } from 'lucide-react';
+import { CalendarDays, ClipboardList, Forklift, HardHat, Pause, Play, RotateCcw, Truck, Warehouse } from 'lucide-react';
+import { trucks as fleet } from '../config/fleet';
+import { useView } from '../state/view';
 import { devYard } from '../config/devYard';
 import { polygonBounds } from '../domain/geometry';
 import { yardBounds } from '../domain/yard';
@@ -45,6 +47,13 @@ function TruckDetail({ id }: { id: string }) {
       <Header icon={<Truck size={20} />} eyebrow={`${t.carrier} freight`} title={t.id} subtitle={`${t.driver} · ${t.plate}`} entity={{ kind: 'truck', id }} />
       <StatusLine tone={t.held ? 'red' : st.tone} label={t.held ? 'On hold' : st.label} detail={t.detail} />
       {t.scripted && t.onSite && <HoldButton id={t.id} held={t.held} />}
+      {fleet.find((f) => f.id === id)?.plannable && (
+        <ActionBar>
+          <Button tone="primary" onClick={() => useView.getState().openPlanner(id)} title="Plan how this truck is loaded">
+            <ClipboardList size={15} /> Plan load
+          </Button>
+        </ActionBar>
+      )}
       {t.progress && <Meter value={t.progress.done / t.progress.total} tone="green" right={`${t.progress.done}/${t.progress.total}`} />}
       <Rows>
         <Row label="Shipment">

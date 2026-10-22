@@ -6,6 +6,7 @@ import { useLayers } from '../state/layers';
 import { useUi } from '../state/ui';
 import { useView } from '../state/view';
 import { useInventory } from '../world/inventory';
+import { useLoading } from '../loading/store';
 import { useWorld } from '../world/store';
 import { placeAt, startMove } from '../ui/actions';
 
@@ -25,7 +26,7 @@ export function DevHooks() {
     (window as unknown as Record<string, unknown>).__yard = {
       clock,
       actions: { placeAt, startMove },
-      stores: { ui: useUi, view: useView, layers: useLayers, inventory: useInventory, world: useWorld, control: useControl, sim: useSim },
+      stores: { ui: useUi, view: useView, layers: useLayers, inventory: useInventory, world: useWorld, control: useControl, sim: useSim, loading: useLoading },
       camera,
       gl,
       scene,

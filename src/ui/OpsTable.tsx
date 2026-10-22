@@ -1,4 +1,6 @@
-import { ChevronRight, Download, FilePlus2 } from 'lucide-react';
+import { ChevronRight, ClipboardList, Download, FilePlus2 } from 'lucide-react';
+import { trucks as fleet } from '../config/fleet';
+import { useView } from '../state/view';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useUi } from '../state/ui';
 import { useInventory } from '../world/inventory';
@@ -13,8 +15,8 @@ import { BAY_STATUS, CARRIER_COLORS, FORKLIFT_STATUS, TRUCK_STATUS, batteryTone 
 
 type Tab = 'docks' | 'forklifts' | 'trucks' | 'cargo' | 'docs';
 
-function TableRow({ head, sub, middle, status, right, onClick }: { head: string; sub: string; middle: ReactNode; status: ReactNode; right: ReactNode; onClick: () => void }) {
-  return (
+function TableRow({ head, sub, middle, status, right, onClick, action }: { head: string; sub: string; middle: ReactNode; status: ReactNode; right: ReactNode; onClick: () => void; action?: ReactNode }) {
+  const row = (
     <button type="button" onClick={onClick} className="grid w-full grid-cols-[68px_1fr_auto_62px_14px] items-center gap-2.5 border-t border-line py-2 text-left first:border-t-0 hover:bg-[#f7f9fc]">
       <span className="leading-tight">
         <span className="block text-[12.5px] font-bold text-ink">{head}</span>
@@ -25,6 +27,13 @@ function TableRow({ head, sub, middle, status, right, onClick }: { head: string;
       <span className="text-[11px] text-muted tabular-nums">{right}</span>
       <ChevronRight size={14} className="text-faint" />
     </button>
+  );
+  if (!action) return row;
+  return (
+    <div className="flex items-center gap-1 border-t border-line first:border-t-0 [&>button:first-child]:border-t-0">
+      {row}
+      {action}
+    </div>
   );
 }
 
@@ -126,6 +135,19 @@ export function OpsTable() {
                 status={<Pill tone={st.tone}>{st.label}</Pill>}
                 right={b.progress ? <Progress {...b.progress} /> : ''}
                 onClick={() => (b.truckId ? selectAndFocus({ kind: 'truck', id: b.truckId }) : focusPoint(b.x, b.y, 36))}
+                action={
+                  b.truckId && fleet.find((f) => f.id === b.truckId)?.plannable ? (
+                    <button
+                      type="button"
+                      title={`Plan the load of ${b.truckId}`}
+                      aria-label={`Plan the load of ${b.truckId}`}
+                      onClick={() => useView.getState().openPlanner(b.truckId!)}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-brand hover:bg-[#eef3ff]"
+                    >
+                      <ClipboardList size={15} />
+                    </button>
+                  ) : undefined
+                }
               />
             );
           })}

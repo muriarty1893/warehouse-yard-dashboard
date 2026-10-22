@@ -217,7 +217,7 @@ function YardChip() {
   );
 }
 
-function TimeControls() {
+export function TimeControls() {
   const { speed, paused, setSpeed, togglePause } = useSim();
   const clock = useWorld((s) => s.clock);
   return (

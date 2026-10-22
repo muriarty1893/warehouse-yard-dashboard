@@ -12,6 +12,7 @@ import { useView } from '../state/view';
 import { Card } from './kit';
 import { HelpPanel, MapButtons } from './MapButtons';
 import { OpsTable } from './OpsTable';
+import { PlannerDashboard } from './planner/PlannerDashboard';
 import { ShipmentTracker } from './ShipmentTracker';
 import { TopBar } from './TopBar';
 
@@ -42,6 +43,15 @@ function LegendChip() {
 /** Operations dashboard over the 3D twin. Reads the World State snapshot only. */
 export function Dashboard() {
   useEffect(() => startWorldSync(), []);
+  const planner = useView((s) => s.planner);
+  if (planner)
+    return (
+      <>
+        <PlannerDashboard truckId={planner.truckId} />
+        <Toasts />
+        <Dialogs />
+      </>
+    );
   return (
     <>
       <TopBar />

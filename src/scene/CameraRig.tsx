@@ -25,6 +25,7 @@ export const cameraView = { x: yb.cx, y: yb.cy, yaw: 0, distance: 0 };
 interface ControlsLike {
   target: THREE.Vector3;
   update: () => void;
+  maxPolarAngle: number;
 }
 
 interface Flight {
@@ -32,9 +33,17 @@ interface Flight {
   fromTarget: THREE.Vector3;
   toPos: THREE.Vector3;
   toTarget: THREE.Vector3;
+  fromFov: number;
+  toFov: number;
+  /** Near plane to switch to when the flight lands (clips what stands between camera and subject). */
+  near: number;
   start: number;
   duration: number;
 }
+
+/** How far the camera may tilt towards the horizon: the yard view, and the planner's side view. */
+const YARD_POLAR = 1.22;
+const PLANNER_POLAR = 1.56;
 
 const UP = new THREE.Vector3(0, 1, 0);
 const ease = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
@@ -48,17 +57,25 @@ const typing = (e: KeyboardEvent) => {
  * the UI, follow mode, and keyboard control (WASD pan, Q/E rotate, Z/X zoom).
  */
 export function CameraRig() {
-  const camera = useThree((s) => s.camera);
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const controls = useThree((s) => s.controls) as unknown as ControlsLike | null;
   const flight = useRef<Flight | null>(null);
   const keys = useRef(new Set<string>());
   const followPos = useRef<THREE.Vector3 | null>(null);
   const command = useView((s) => s.command);
   const follow = useView((s) => s.follow);
+  const planner = useView((s) => !!s.planner);
+  /** Where the camera was before the planner framed a truck. */
+  const saved = useRef<{ pos: THREE.Vector3; target: THREE.Vector3; fov: number; near: number } | null>(null);
 
-  const fly = (toPos: THREE.Vector3, toTarget: THREE.Vector3, duration = 0.9) => {
+  const fly = (toPos: THREE.Vector3, toTarget: THREE.Vector3, duration = 0.9, toFov = camera.fov, near = saved.current?.near ?? camera.near) => {
     if (!controls) return;
-    flight.current = { fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos, toTarget, start: performance.now(), duration };
+    // Drop any clipping right away; a new one applies once the camera is in place.
+    if (camera.near !== (saved.current?.near ?? camera.near)) {
+      camera.near = saved.current?.near ?? camera.near;
+      camera.updateProjectionMatrix();
+    }
+    flight.current = { fromPos: camera.position.clone(), fromTarget: controls.target.clone(), toPos, toTarget, fromFov: camera.fov, toFov, near, start: performance.now(), duration };
   };
 
   useEffect(() => {
@@ -90,6 +107,20 @@ export function CameraRig() {
         p.y = Math.max(0, p.y);
         const dist = command.distance ?? 42;
         fly(p.clone().add(offset.setLength(dist)), p, 1.0);
+        break;
+      }
+      case 'frame': {
+        if (!saved.current) saved.current = { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov, near: camera.near };
+        useView.getState().setFollow(null);
+        const to = new THREE.Vector3(...yardToWorld(command.x, command.y, command.h));
+        const dir = new THREE.Vector3(Math.cos(command.pitch) * Math.cos(command.yaw), Math.sin(command.pitch), -Math.cos(command.pitch) * Math.sin(command.yaw));
+        fly(to.clone().add(dir.multiplyScalar(command.distance)), to, 1.0, command.fov, command.near ?? saved.current.near);
+        break;
+      }
+      case 'restore': {
+        const s = saved.current;
+        if (s) fly(s.pos, s.target, 0.9, s.fov, s.near);
+        saved.current = null;
         break;
       }
     }
@@ -149,6 +180,10 @@ export function CameraRig() {
             cancelPlacing();
             break;
           }
+          if (view.planner && !ui.selected) {
+            view.closePlanner();
+            break;
+          }
           ui.select(null);
           view.setFollow(null);
           view.toggleHelp(false);
@@ -196,13 +231,34 @@ export function CameraRig() {
       const e = ease(u);
       camera.position.lerpVectors(f.fromPos, f.toPos, e);
       controls.target.lerpVectors(f.fromTarget, f.toTarget, e);
-      if (u >= 1) flight.current = null;
+      if (f.fromFov !== f.toFov) {
+        camera.fov = f.fromFov + (f.toFov - f.fromFov) * e;
+        camera.updateProjectionMatrix();
+      }
+      if (u >= 1) {
+        if (camera.near !== f.near) {
+          camera.near = f.near;
+          camera.updateProjectionMatrix();
+        }
+        flight.current = null;
+      }
     }
+    // Low side views only in the planner; back to the yard limit once the camera has flown home.
+    const polar = planner ? PLANNER_POLAR : flight.current ? controls.maxPolarAngle : YARD_POLAR;
+    if (controls.maxPolarAngle !== polar) controls.maxPolarAngle = polar;
 
     cameraView.x = controls.target.x;
     cameraView.y = -controls.target.z;
     cameraView.yaw = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
     cameraView.distance = camera.position.distanceTo(controls.target);
+    // A clipped planner view must not cut into the truck when zoomed in.
+    if (saved.current && !flight.current && camera.near > saved.current.near) {
+      const most = Math.max(saved.current.near, cameraView.distance - 3.5);
+      if (camera.near > most) {
+        camera.near = most;
+        camera.updateProjectionMatrix();
+      }
+    }
 
     const followed = follow ? entityObject(follow) : undefined;
     if (followed && !flight.current) {
