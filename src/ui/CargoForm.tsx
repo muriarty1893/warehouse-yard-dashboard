@@ -27,6 +27,7 @@ interface Form {
   l: string;
   w: string;
   h: string;
+  fragile: boolean;
   withDoc: boolean;
   docType: DocumentType;
   docNumber: string;
@@ -61,6 +62,7 @@ export function CargoForm({ cargoId, draft }: { cargoId?: string; draft?: Regist
       ...base,
       description: src?.description ?? '',
       destination: src?.destination ?? 'Ankara',
+      fragile: !!src?.fragile,
       withDoc: draft ? !!doc : !existing,
       docType: doc?.type ?? 'delivery_note',
       docNumber: doc?.number ?? '',
@@ -83,7 +85,7 @@ export function CargoForm({ cargoId, draft }: { cargoId?: string; draft?: Regist
     if (!valid) return setError('Check the dimensions (max 250 × 250 × 300 cm).'), null;
     if (f.withDoc && !f.docNumber.trim()) return setError('Enter the document number, or untick "Add source document".'), null;
     const lookType = lookDefaults(f.look).type;
-    const input: CargoInput = { id: f.id.trim(), type: lookType, look: f.look, description: f.description.trim(), destination: f.destination.trim() || '—', weightKg: Math.max(0, Number(f.weightKg) || 0), dims };
+    const input: CargoInput = { id: f.id.trim(), type: lookType, look: f.look, description: f.description.trim(), destination: f.destination.trim() || '—', weightKg: Math.max(0, Number(f.weightKg) || 0), dims, ...(f.fragile ? { fragile: true } : {}) };
     const doc: DocumentInput | undefined = f.withDoc
       ? {
           cargoId: input.id,
@@ -105,7 +107,7 @@ export function CargoForm({ cargoId, draft }: { cargoId?: string; draft?: Regist
   const saveEdit = () => {
     const d = build();
     if (!d || !existing) return;
-    inv.update(existing.id, { description: d.input.description, destination: d.input.destination, weightKg: d.input.weightKg, dims: d.input.dims, look: d.input.look, type: d.input.type });
+    inv.update(existing.id, { description: d.input.description, destination: d.input.destination, weightKg: d.input.weightKg, dims: d.input.dims, look: d.input.look, type: d.input.type, fragile: f.fragile });
     notify(`${existing.id} updated`);
     close();
   };
@@ -165,6 +167,9 @@ export function CargoForm({ cargoId, draft }: { cargoId?: string; draft?: Regist
             ))}
           </div>
         </Field>
+        <div className="rounded-xl border border-line px-2 py-1">
+          <Toggle on={f.fragile} onChange={() => set('fragile', !f.fragile)} label="Fragile" hint="Nothing may be stacked on it, in the yard or in a truck" />
+        </div>
 
         {!existing && (
           <div className="rounded-xl border border-line">

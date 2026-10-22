@@ -5,6 +5,7 @@ import { Card } from '../kit';
 import { AxleCard } from './AxleCard';
 import { frameTruck } from './camera';
 import { DistributionChart } from './DistributionChart';
+import { PlanDrawing } from './PlanDrawing';
 import { PlannerKpis } from './PlannerKpis';
 import { PlannerTable } from './PlannerTable';
 import { PlannerTopBar } from './PlannerTopBar';
@@ -38,6 +39,11 @@ export function PlannerDashboard({ truckId }: { truckId: string }) {
         <AxleCard truckId={truckId} />
         <DistributionChart truckId={truckId} />
       </div>
+      {view === 'plan' && (
+        <div className="pointer-events-auto absolute top-[76px] right-[328px] bottom-[328px] left-[292px] z-10 xl:right-[388px]">
+          <PlanDrawing truckId={truckId} />
+        </div>
+      )}
       <div data-planner-rail className="pointer-events-none absolute right-4 bottom-4 left-[292px] z-10 flex h-[300px] flex-col gap-3">
         <PlannerKpis truckId={truckId} />
         <PlannerTable truckId={truckId} />

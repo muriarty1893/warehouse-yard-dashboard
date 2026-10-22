@@ -21,7 +21,7 @@ export const LAYOUT = hashString(JSON.stringify([devYard.storage, devYard.bays, 
 
 export type Result = { ok: true } | { ok: false; reason: string };
 export type CargoInput = Omit<Cargo, 'x' | 'y' | 'yaw' | 'on' | 'areaId' | 'pinned' | 'source'>;
-export type CargoPatch = Partial<Pick<Cargo, 'description' | 'destination' | 'weightKg' | 'dims' | 'type' | 'look'>>;
+export type CargoPatch = Partial<Pick<Cargo, 'description' | 'destination' | 'weightKg' | 'dims' | 'type' | 'look' | 'fragile'>>;
 export type DocumentInput = Omit<SourceDocument, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'source'> & { id?: string };
 
 interface Saved {

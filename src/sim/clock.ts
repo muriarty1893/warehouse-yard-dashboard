@@ -31,9 +31,12 @@ export const useSim = create<SimControls>((set, get) => ({
   },
 }));
 
+/** Longest frame step the clock takes: frames are rare while the planner's 2D plan covers the view. */
+export const frameStep = { max: 0.1 };
+
 export function SimClock() {
   useFrame((_, dt) => {
-    clock.t += Math.min(dt, 0.1) * clock.speed;
+    clock.t += Math.min(dt, frameStep.max) * clock.speed;
   }, -10);
   return null;
 }

@@ -11,6 +11,7 @@ import type { EntityRef } from '../state/ui';
 import type { Overlay } from '../state/layers';
 import { labelledCargo, useInventory } from './inventory';
 import { inYard } from './placement';
+import { planOf, useLoading, type PlanStatus } from '../loading/store';
 import { fmtClock, fmtDuration } from './time';
 
 /**
@@ -292,8 +293,27 @@ function steps(labels: string[], times: number[], current: number, t: number): S
 
 // ---------------------------------------------------------------------------
 
+/** Seconds per unit when the forklifts load a planned truck (two share the trips). */
+const PLANNED_PACE = 35;
+
+/** A plannable truck's shipment as its load plan describes it (spec §3.3). */
+function planned(m: TruckModel): { shipment: Shipment; units: number; status: PlanStatus } | null {
+  const s = useLoading.getState();
+  const t = s.trucks[m.spec.id];
+  const plan = planOf(s, m.spec.id);
+  if (!t || !plan) return null;
+  const n = plan.route.length;
+  return {
+    shipment: { ...m.shipment, direction: 'outbound', place: `${plan.route[0] ?? '—'}${n > 1 ? ` +${n - 1}` : ''}`, pallets: plan.placements.length, weightT: Math.round(plan.stats.weightKg / 100) / 10 },
+    units: plan.placements.length,
+    status: t.status,
+  };
+}
+
 function truckState(m: TruckModel, t: number): TruckState {
-  const { spec, route, bay, shipment } = m;
+  const { spec, route, bay } = m;
+  const plan = route ? null : planned(m);
+  const shipment = plan?.shipment ?? m.shipment;
   const verb = shipment.direction === 'inbound' ? 'Unloading' : 'Loading';
   const base: Omit<TruckState, 'status' | 'detail' | 'onSite' | 'x' | 'y' | 'where' | 'speedKmh' | 'progress' | 'etaSec' | 'steps'> = {
     id: spec.id,
@@ -381,7 +401,22 @@ function truckState(m: TruckModel, t: number): TruckState {
   let etaSec: number | null = null;
   let detail = spec.status;
   let current = 1;
-  if (spec.activity === 'loading' || spec.activity === 'unloading') {
+  if (plan && plan.status === 'dispatched') {
+    detail = 'Dispatched';
+    current = 3;
+  } else if (plan && plan.status === 'loaded') {
+    status = 'loading';
+    progress = { done: plan.units, total: plan.units };
+    detail = 'Loaded · ready to depart';
+    current = 3;
+  } else if (plan && (spec.activity === 'loading' || plan.status === 'loading')) {
+    const done = currentCargo().filter((c) => c.loadedOn?.truckId === spec.id).length;
+    status = 'loading';
+    progress = { done, total: plan.units };
+    etaSec = (plan.units - done) * PLANNED_PACE;
+    detail = `${bay?.id} · ${done}/${plan.units} units`;
+    current = 2;
+  } else if (spec.activity === 'loading' || spec.activity === 'unloading') {
     const fl = forkliftOf(spec.id);
     const pace = fl?.route ? fl.route.period : m.pace;
     const done = (m.base + (fl?.route ? cyclesDone(fl.route, entityTime(fl.spec.id, t)) : Math.floor(t / pace))) % (total + 1);

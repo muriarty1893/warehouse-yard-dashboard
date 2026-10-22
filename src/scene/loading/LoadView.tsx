@@ -90,6 +90,8 @@ function Viewport() {
 
 function PlannedLoad({ truckId }: { truckId: string }) {
   const plan = useLoading((s) => planOf(s, truckId));
+  // The 2D plan covers the view; DOM labels in the scene would float over it.
+  const drawing = useView((s) => s.plannerView === 'plan');
   const cargo = useInventory((s) => s.cargo);
   const vehicle = plan?.vehicle;
   const bay = useMemo(() => bayOfTruck(truckId), [truckId]);
@@ -99,7 +101,7 @@ function PlannedLoad({ truckId }: { truckId: string }) {
   return (
     <>
       <PackedUnits plan={plan} v={v} pose={pose} truckId={truckId} cargo={cargo} />
-      <AxleChips plan={plan} v={v} pose={pose} />
+      {!drawing && <AxleChips plan={plan} v={v} pose={pose} />}
       <RowAnchors plan={plan} v={v} pose={pose} />
     </>
   );

@@ -6,6 +6,7 @@ import { useControl } from '../sim/control';
 import { useLayers } from '../state/layers';
 import { useUi, type EntityRef } from '../state/ui';
 import { useInventory } from '../world/inventory';
+import { useLoading } from '../loading/store';
 import { locationOf } from '../world/placement';
 import { yard } from '../world/snapshot';
 import { useWorld } from '../world/store';
@@ -55,9 +56,10 @@ const HIT_ICONS: Record<HitKind, ReactNode> = {
 function searchIndex(): Hit[] {
   const { trucks, forklifts, workers } = useWorld.getState();
   const { cargo, documents } = useInventory.getState();
+  const plans = useLoading.getState().trucks;
   const go = (ref: EntityRef) => () => selectAndFocus(ref);
   return [
-    ...trucks.map((t) => ({ key: t.id, kind: 'Truck' as const, title: t.id, subtitle: `${t.carrier} · ${t.plate} · ${t.where}`, text: `${t.id} ${t.carrier} ${t.plate} ${t.driver} ${t.shipment.id}`, pick: go({ kind: 'truck', id: t.id }) })),
+    ...trucks.map((t) => ({ key: t.id, kind: 'Truck' as const, title: t.id, subtitle: `${t.carrier} · ${t.plate} · ${t.where}${plans[t.id] ? ` · plan: ${plans[t.id].status}` : ''}`, text: `${t.id} ${t.carrier} ${t.plate} ${t.driver} ${t.shipment.id}`, pick: go({ kind: 'truck', id: t.id }) })),
     ...forklifts.map((f) => ({ key: f.id, kind: 'Forklift' as const, title: f.id, subtitle: `${f.operator} · ${f.model}`, text: `${f.id} ${f.operator} ${f.model}`, pick: go({ kind: 'forklift', id: f.id }) })),
     ...workers.map((w) => ({ key: w.id, kind: 'Worker' as const, title: w.name, subtitle: `${w.id} · ${w.role}`, text: `${w.id} ${w.name} ${w.role}`, pick: go({ kind: 'worker', id: w.id }) })),
     ...cargo.map((c) => {

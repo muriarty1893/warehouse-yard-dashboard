@@ -1,6 +1,7 @@
 import { Box, FilePlus2, FileText, LogOut, Move, Pencil, TriangleAlert } from 'lucide-react';
 import { useMemo } from 'react';
 import { devYard } from '../config/devYard';
+import { useLoading } from '../loading/store';
 import { useUi } from '../state/ui';
 import { docsFor, useInventory } from '../world/inventory';
 import { hasOnTop, locationOf, stackBase, stackOf } from '../world/placement';
@@ -133,6 +134,7 @@ export function CargoDetail({ id }: { id: string }) {
           )}
         </Row>
         <Row label="Expected departure">Today {departs}</Row>
+        <LoadRow cargoId={c.id} truckId={c.loadedOn?.truckId ?? null} />
       </Rows>
 
       <Section title="History">
@@ -151,5 +153,24 @@ export function CargoDetail({ id }: { id: string }) {
         )}
       </Section>
     </>
+  );
+}
+
+/** Which truck the unit is planned for or loaded on (spec §3.3). */
+function LoadRow({ cargoId, truckId }: { cargoId: string; truckId: string | null }) {
+  const trucks = useLoading((s) => s.trucks);
+  const plan = useMemo(() => {
+    for (const t of Object.values(trucks)) {
+      const p = (t.confirmed ?? t.recommended)?.placements.find((x) => x.cargoId === cargoId);
+      if (p) return { truckId: t.truckId, stop: p.stop, city: (t.confirmed ?? t.recommended)?.route[p.stop - 1] ?? '', confirmed: !!t.confirmed };
+    }
+    return null;
+  }, [trucks, cargoId]);
+  if (truckId) return <Row label="Load">Loaded on {truckId}</Row>;
+  if (!plan) return null;
+  return (
+    <Row label="Load">
+      {plan.confirmed ? 'Planned for' : 'Proposed for'} {plan.truckId} · stop {plan.stop} {plan.city}
+    </Row>
   );
 }
