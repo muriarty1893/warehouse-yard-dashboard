@@ -19,6 +19,11 @@ invoice), entered by hand.
 - Vehicle movement is simulated: routes are pure functions of time, so pausing and speeding up are free.
   Cargo placement keeps clear of every route automatically.
 - Cargo, documents and history are saved in the browser (localStorage).
+- **Load planner** (select a truck at a loading bay → *Plan load*): a TypeScript solver in `src/loading`
+  packs the yard units bound for the truck's stops, last stop at the front wall. It checks every axle at
+  departure and after each drop, and *Optimise* searches ~1,000 layouts in a Web Worker. The solver's
+  recommended plan, the manager's confirmed plan and what was actually loaded are kept apart. *Load at
+  dock* sends forklifts along A* paths through the yard to load the truck on the sim clock.
 
 ```bash
 npm install
