@@ -30,6 +30,27 @@ function withBounds(b: Obb, reason: string, h: number): Keepout {
   return { ...b, reason, h, x0: b.x - ex, x1: b.x + ex, y0: b.y - ey, y1: b.y + ey };
 }
 
+/** Half extents (along, across) of the floor each kind of fixture takes. */
+export const FIXTURE_SIZE: Record<Fixture['kind'], [number, number]> = {
+  desk: [1.5, 1.1],
+  charger: [0.6, 0.5],
+  pallets: [0.7, 0.5],
+  skip: [1.3, 0.9],
+  bins: [1.3, 0.45],
+  extinguisher: [0.3, 0.3],
+  cones: [1.2, 0.35],
+  palletJack: [0.9, 0.45],
+  lightPole: [0.4, 0.4],
+  bollard: [0.2, 0.2],
+};
+
+/** Floor a fixture takes (a desk with its chair space, a row of bins). */
+export function fixtureBox(fx: Fixture): Obb {
+  const [hl, hw] = FIXTURE_SIZE[fx.kind];
+  const along = fx.kind === 'bins' ? hl * ((fx.count ?? 1) / 3) : hl;
+  return { x: fx.x, y: fx.y + (fx.kind === 'desk' ? 0.4 : 0), yaw: fx.kind === 'desk' ? 0 : fx.heading, hl: along, hw };
+}
+
 /** Footprint of a vehicle at a pose: [behind origin, ahead of origin, half width]. */
 const TRUCK_BODY: [number, number, number] = [RIGID.rear, RIGID.front, RIGID.width / 2 + 0.35];
 const FORKLIFT_BODY: [number, number, number] = [1.45, 2.1, 0.7];
@@ -77,24 +98,7 @@ function build(): Keepout[] {
   }
   for (const r of devYard.ramps) out.push(withBounds(rectObb({ x: r.rect.x - 0.6, y: r.rect.y - 1.5, w: r.rect.w + 1.2, h: r.rect.h + 3 }), 'Ramp and its approach', 0));
   for (const a of devYard.areas) if (a.kind === 'restricted' || a.kind === 'forklift') out.push(withBounds(rectObb(a.rect), `${a.label ?? 'Restricted'} area`, a.elevation ?? 0));
-  const FIXTURE_SIZE: Record<Fixture['kind'], [number, number]> = {
-    desk: [1.5, 1.1],
-    charger: [0.6, 0.5],
-    pallets: [0.7, 0.5],
-    skip: [1.3, 0.9],
-    bins: [1.3, 0.45],
-    extinguisher: [0.3, 0.3],
-    cones: [1.2, 0.35],
-    palletJack: [0.9, 0.45],
-    lightPole: [0.4, 0.4],
-    bollard: [0.2, 0.2],
-  };
-  for (const fx of devYard.fixtures) {
-    const [hl, hw] = FIXTURE_SIZE[fx.kind];
-    const n = fx.count ?? 1;
-    const along = fx.kind === 'bins' ? hl * (n / 3) : hl;
-    out.push(withBounds({ x: fx.x, y: fx.y + (fx.kind === 'desk' ? 0.4 : 0), yaw: fx.kind === 'desk' ? 0 : fx.heading, hl: along, hw }, fx.label ?? fx.id, groundAt(fx.x, fx.y)));
-  }
+  for (const fx of devYard.fixtures) out.push(withBounds(fixtureBox(fx), fx.label ?? fx.id, groundAt(fx.x, fx.y)));
   // In front of every door.
   for (const bld of devYard.buildings) {
     for (const d of bld.doors ?? []) {
