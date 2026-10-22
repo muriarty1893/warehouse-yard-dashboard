@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bayById } from '../config/devYard';
 import { bayRear, parkInBay } from '../domain/vehicles';
-import { bayFitWarning, bayOfTruck, boxToLocal, boxToYard, rigidLayout, truckPoseFor } from './frame';
+import { bayFitWarning, bayOfTruck, boxToLocal, boxToYard, rigidLayout, truckPoseFor, yardToBox } from './frame';
 import { vehicleById } from './vehicles';
 
 const L1 = bayById('L1');
@@ -67,5 +67,14 @@ describe('box frame', () => {
     // The rear axle stands at box x 4.6 (statics) — model x 0.
     expect(boxToLocal(v, 4.6)).toBeCloseTo(r.rearAxles[0], 6);
     expect(boxToLocal(v, -1.2)).toBeCloseTo(r.frontAxle, 6);
+  });
+
+  it('yardToBox undoes boxToYard', () => {
+    const v = vehicleById('rigid-26');
+    const pose = truckPoseFor(L1, v);
+    const [x, y] = boxToYard(pose, v, 2.5, 0.7);
+    const [bx, by] = yardToBox(pose, v, x, y);
+    expect(bx).toBeCloseTo(2.5, 9);
+    expect(by).toBeCloseTo(0.7, 9);
   });
 });

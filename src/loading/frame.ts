@@ -29,6 +29,15 @@ export function boxToYard(pose: Pose, v: VehicleSpec, x: number, y: number): Vec
   return [pose.x + c * fwd - s * left, pose.y + s * fwd + c * left];
 }
 
+/** Box-frame point of a yard point for a truck at `pose` (inverse of boxToYard). */
+export function yardToBox(pose: Pose, v: VehicleSpec, x: number, y: number): Vec2 {
+  const c = Math.cos(pose.heading);
+  const s = Math.sin(pose.heading);
+  const dx = x - pose.x;
+  const dy = y - pose.y;
+  return [v.model.frontWall - (dx * c + dy * s), -dx * s + dy * c + v.inner.w / 2];
+}
+
 /** Warning when a what-if vehicle is much longer than the bay (spec §1.3). */
 export function bayFitWarning(bay: TruckBay, v: VehicleSpec): string | null {
   if (v.overallLength <= bay.length + 1.5) return null;

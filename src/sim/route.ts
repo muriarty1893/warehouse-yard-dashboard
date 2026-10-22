@@ -58,6 +58,8 @@ export interface RouteSpec {
   offset?: number;
   /** Distance from the fifth wheel to the trailer axles (semi-trucks). */
   trailerLag?: number;
+  /** Play once from `offset` instead of looping (a job such as a loading run). */
+  once?: boolean;
 }
 
 export interface RoutePose {
@@ -182,12 +184,12 @@ const smooth = (u: number) => u * u * (3 - 2 * u);
 
 export function evalRoute(route: CompiledRoute, time: number, out: RoutePose): RoutePose {
   const { period } = route;
-  let local = (time - (route.spec.offset ?? 0)) % period;
-  if (local < 0) local += period;
+  let local = route.spec.once ? time - (route.spec.offset ?? 0) : (time - (route.spec.offset ?? 0)) % period;
+  if (local < 0 && !route.spec.once) local += period;
 
   out.local = local;
   out.untilStart = period - local;
-  if (local > route.duration) {
+  if (local < 0 || local > route.duration) {
     out.visible = false;
     out.phase = null;
     return out;

@@ -48,3 +48,15 @@ describe('scripted routes', () => {
     }
   });
 });
+
+describe('one-shot routes', () => {
+  it('a once route plays once', () => {
+    const r = compileRoute({ speed: 2, accel: 1, once: true, offset: 100, legs: [{ kind: 'drive', path: [[0, 0], [10, 0]] }, { kind: 'wait', seconds: 3 }] });
+    const pose = newPose();
+    expect(evalRoute(r, 99, pose).visible).toBe(false);
+    expect(evalRoute(r, 100.5, pose).visible).toBe(true);
+    expect(evalRoute(r, 100 + r.duration - 0.1, pose).visible).toBe(true);
+    expect(evalRoute(r, 100 + r.duration + 0.5, pose).visible).toBe(false);
+    expect(evalRoute(r, 100 + r.duration + r.duration + 1, pose).visible).toBe(false);
+  });
+});

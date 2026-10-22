@@ -40,6 +40,15 @@ describe('candidates', () => {
     expect(items.map((i) => i.id)).not.toContain('CARGO-90002');
   });
 
+  it('units a forklift cannot reach are left out with a reason', () => {
+    const base = cargo.find((c) => c.destination === 'Ankara' && !c.on && !hasOnTop(cargo, c.id) && c.look !== 'container')!;
+    const unit = (id: string, x: number, y: number, destination = 'İzmir'): Cargo => ({ ...base, id, x, y, yaw: 0, on: null, areaId: 'OY', destination, dims: { l: 1.2, w: 0.8, h: 1 } });
+    const boxed = [unit('CARGO-91000', 10, 12, 'Ankara'), unit('CARGO-91001', 10, 13.1), unit('CARGO-91002', 10, 10.9), unit('CARGO-91003', 11.5, 12), unit('CARGO-91004', 8.5, 12)];
+    const { items, blocked } = candidatesFor(input('TRUCK-102'), [...cargo.filter((c) => Math.hypot(c.x - 10, c.y - 12) > 4), ...boxed], new Set());
+    expect(blocked.find((b) => b.cargoId === 'CARGO-91000')?.reason).toBe('No forklift access — boxed in by other cargo');
+    expect(items.map((i) => i.id)).not.toContain('CARGO-91000');
+  });
+
   it('include adds a unit at the chosen stop; exclude removes one; urgent sets urgent', () => {
     const extra = cargo.find((c) => c.destination === 'İzmir' && !hasOnTop(cargo, c.id) && c.look !== 'container')!;
     const plain = candidatesFor(input('TRUCK-102'), cargo, new Set()).items;
@@ -63,7 +72,7 @@ describe('planAll', () => {
   });
 
   it('overflow goes to the next truck on the queue that covers the destination', () => {
-    const plans = planAll([input('TRUCK-102', { vehicle: 'rigid-12', route: ['Ankara'] }), input('TRUCK-109'), input('TRUCK-110')], cargo, {});
+    const plans = planAll([input('TRUCK-102', { vehicle: 'rigid-12', route: ['Ankara', 'Kayseri'] }), input('TRUCK-109'), input('TRUCK-110')], cargo, {});
     const overflow = plans['TRUCK-102'].leftOut.filter((l) => l.to === 'TRUCK-110');
     expect(overflow.length).toBeGreaterThan(0);
     for (const l of overflow) expect(plans['TRUCK-110'].placements.map((p) => p.cargoId)).toContain(l.cargoId);

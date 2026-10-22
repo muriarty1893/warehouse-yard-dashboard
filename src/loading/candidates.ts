@@ -1,5 +1,6 @@
 import { hashString, isStackable } from '../domain/seed';
 import type { Cargo } from '../domain/types';
+import { buildGrid, reachUnit, type Grid } from '../sim/grid';
 import { inYard } from '../world/placement';
 import { tooBig } from './pack';
 import { buildPlan } from './plan';
@@ -21,7 +22,9 @@ export function fingerprint(c: Cargo): { goods: number; spot: number } {
 
 export const inputsHash = (input: TruckPlanInput) => hashString(JSON.stringify([input.route, input.vehicle, input.include, input.exclude, input.urgent]));
 
-export function candidatesFor(input: TruckPlanInput, cargo: Cargo[], taken: Set<string>): { items: PackItem[]; blocked: LeftOut[] } {
+/** A truck's route units; `grid` (forklift access) is built from the cargo when not given. */
+export function candidatesFor(input: TruckPlanInput, cargo: Cargo[], taken: Set<string>, grid?: Grid): { items: PackItem[]; blocked: LeftOut[] } {
+  let g = grid;
   const v = vehicleById(input.vehicle);
   const included = new Map(input.include.map((i) => [i.cargoId, i.stop]));
   const exclude = new Set(input.exclude);
@@ -39,7 +42,9 @@ export function candidatesFor(input: TruckPlanInput, cargo: Cargo[], taken: Set<
     else if (top) block(`Under ${top.id} — move it first`);
     else {
       const big = tooBig(v, c.dims);
+      g ??= buildGrid(cargo);
       if (big) block(big);
+      else if (!reachUnit(g, cargo, c)) block('No forklift access — boxed in by other cargo');
       else items.push({ id: c.id, stop, l: c.dims.l, w: c.dims.w, h: c.dims.h, weightKg: c.weightKg, stackable: isStackable(c.look), fragile: !!c.fragile, urgent: urgent.has(c.id) });
     }
   }
@@ -56,6 +61,7 @@ export function planAll(inputs: TruckPlanInput[], cargo: Cargo[], confirmed: Rec
   for (const [truckId, plan] of Object.entries(confirmed)) for (const p of plan?.placements ?? []) placedBy.set(p.cargoId, truckId);
   const byId = new Map(cargo.map((c) => [c.id, c]));
   const plans: Record<string, LoadPlan> = {};
+  const grid = buildGrid(cargo);
 
   for (const input of inputs) {
     const kept = confirmed[input.truckId];
@@ -64,7 +70,7 @@ export function planAll(inputs: TruckPlanInput[], cargo: Cargo[], confirmed: Rec
       continue;
     }
     const taken = new Set([...placedBy.keys()]);
-    const { items, blocked } = candidatesFor(input, cargo, taken);
+    const { items, blocked } = candidatesFor(input, cargo, taken, grid);
     const core = buildPlan(vehicleById(input.vehicle), items, input.route);
     const units: LoadPlan['units'] = {};
     for (const p of core.placements) {

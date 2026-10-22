@@ -1,11 +1,11 @@
 import { devYard } from '../config/devYard';
 import { trucks } from '../config/fleet';
-import { pointInPolygon, type Obb } from '../domain/geometry';
+import type { Obb } from '../domain/geometry';
 import type { Cargo, Vec2 } from '../domain/types';
 import { FORKLIFT, RIGID } from '../domain/vehicles';
 import { heightAt, yardBounds } from '../domain/yard';
 import { fixtureBox } from '../world/clearance';
-import { inYard } from '../world/placement';
+import { inYard, stackBase } from '../world/placement';
 
 /**
  * Where a forklift can drive (spec §3.1): a 0.25 m occupancy grid of the yard
@@ -21,6 +21,7 @@ export interface Grid {
   y0: number;
   nx: number;
   ny: number;
+  /** How many obstacles cover each cell (0 = free), so a unit can be taken out again. */
   blocked: Uint8Array;
   h: Float32Array;
 }
@@ -30,7 +31,7 @@ const STEP = 0.3;
 /** Keep this far off the boundary walls. */
 const WALL = 0.5;
 
-function fill(g: Grid, b: Obb, grow: number) {
+function fill(g: Grid, b: Obb, grow: number, add = 1) {
   const c = Math.cos(b.yaw);
   const s = Math.sin(b.yaw);
   const hl = b.hl + grow;
@@ -45,7 +46,8 @@ function fill(g: Grid, b: Obb, grow: number) {
     for (let i = i0; i <= i1; i++) {
       const dx = g.x0 + (i + 0.5) * g.cell - b.x;
       const dy = g.y0 + (j + 0.5) * g.cell - b.y;
-      if (Math.abs(dx * c + dy * s) <= hl && Math.abs(-dx * s + dy * c) <= hw) g.blocked[j * g.nx + i] = 1;
+      const k = j * g.nx + i;
+      if (Math.abs(dx * c + dy * s) <= hl && Math.abs(-dx * s + dy * c) <= hw) g.blocked[k] = Math.max(0, Math.min(255, g.blocked[k] + add));
     }
   }
 }
@@ -78,13 +80,23 @@ export function buildGrid(cargo: Cargo[], opts: { ignore?: Set<string>; inflate?
       }
     }
   }
-  // Walls: outside the boundary, or too close to it.
+  // Walls: outside the boundary (scanline per row), or too close to it.
+  const poly = devYard.boundary;
   for (let j = 0; j < ny; j++) {
     const y = b.y0 + (j + 0.5) * CELL;
+    const xs: number[] = [];
+    for (let a = 0, c = poly.length - 1; a < poly.length; c = a++) {
+      const [ax, ay] = poly[a];
+      const [cx, cy] = poly[c];
+      if (ay > y !== cy > y) xs.push(ax + ((y - ay) * (cx - ax)) / (cy - ay));
+    }
+    xs.sort((p, q) => p - q);
     for (let i = 0; i < nx; i++) {
       const x = b.x0 + (i + 0.5) * CELL;
-      const edge = Math.min(x - b.x0, b.x1 - x, y - b.y0, b.y1 - y) < WALL + 1;
-      if (edge ? !pointInPolygon(x, y, devYard.boundary) || wallDistance(x, y) < WALL : !pointInPolygon(x, y, devYard.boundary)) g.blocked[j * nx + i] = 1;
+      let inside = false;
+      for (const cross of xs) if (cross < x) inside = !inside;
+      const near = Math.min(x - b.x0, b.x1 - x, y - b.y0, b.y1 - y) < WALL + 1;
+      if (!inside || (near && wallDistance(x, y) < WALL)) g.blocked[j * nx + i] = 1;
     }
   }
   for (const bld of devYard.buildings) {
@@ -101,9 +113,21 @@ export function buildGrid(cargo: Cargo[], opts: { ignore?: Set<string>; inflate?
   }
   for (const c of cargo) {
     if (c.on || !inYard(c) || ignore.has(c.id)) continue;
-    fill(g, { x: c.x, y: c.y, yaw: c.yaw, hl: c.dims.l / 2, hw: c.dims.w / 2 }, grow);
+    fill(g, cargoBox(c), grow);
   }
   return g;
+}
+
+const cargoBox = (c: Cargo): Obb => ({ x: c.x, y: c.y, yaw: c.yaw, hl: c.dims.l / 2, hw: c.dims.w / 2 });
+
+/** Take a unit out of the grid (it has been picked up), freeing its floor. */
+export function clearUnit(g: Grid, c: Cargo, inflate = 0.6) {
+  if (!c.on) fill(g, cargoBox(c), inflate, -1);
+}
+
+/** Put a unit back into the grid (undo clearUnit). */
+export function restoreUnit(g: Grid, c: Cargo, inflate = 0.6) {
+  if (!c.on) fill(g, cargoBox(c), inflate, 1);
 }
 
 const cellOf = (g: Grid, x: number, y: number) => {
@@ -267,4 +291,18 @@ export function approachFor(g: Grid, c: Cargo, alongLength: boolean): { stand: V
     }
   }
   return null;
+}
+
+/**
+ * Approach to a unit as if it (and, when stacked, the unit under it) were not
+ * in the grid; the grid is left as it was. Null when other cargo boxes it in.
+ */
+export function reachUnit(g: Grid, cargo: Cargo[], c: Cargo, alongLength = true): { stand: Vec2; heading: number } | null {
+  const below = c.on ? stackBase(cargo, c).base : null;
+  clearUnit(g, c);
+  if (below) clearUnit(g, below);
+  const a = approachFor(g, c, alongLength);
+  if (below) restoreUnit(g, below);
+  restoreUnit(g, c);
+  return a;
 }

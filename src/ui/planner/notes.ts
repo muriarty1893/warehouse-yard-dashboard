@@ -6,7 +6,7 @@ import { locationOf } from '../../world/placement';
 /** Plain-language summaries for the planner panels. */
 
 /** Units that can never go on a truck as they are (not overflow). */
-export const isBlocked = (reason: string) => /^(Container|Under |Too big)/.test(reason);
+export const isBlocked = (reason: string) => /^(Container|Under |Too big|No forklift access)/.test(reason);
 
 const units = (n: number) => `${n} unit${n === 1 ? '' : 's'}`;
 
