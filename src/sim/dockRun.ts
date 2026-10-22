@@ -6,7 +6,7 @@ import { useLoading } from '../loading/store';
 import { vehicleById } from '../loading/vehicles';
 import { useUi } from '../state/ui';
 import { useInventory, type Result } from '../world/inventory';
-import { entityTime } from './control';
+import { entityTime, useControl } from './control';
 import { useJobs } from './jobs';
 import { buildLoadingRun } from './loadingRun';
 import { compileRoute, evalRoute, newPose } from './route';
@@ -78,7 +78,7 @@ export function tickLoading(t: number) {
   const stops = new Map(truck.confirmed.placements.map((p) => [p.cargoId, p.stop]));
   const bay = bayOfTruck(run.truckId)?.id ?? '';
   for (const trip of run.trips) {
-    if (trip.skipped || trip.setAt > t) continue;
+    if (trip.skipped || trip.setAt > entityTime(trip.forkliftId, t)) continue;
     const c = useInventory.getState().cargo.find((u) => u.id === trip.cargoId);
     if (!c || c.loadedOn) continue;
     const was = truck.confirmed.units[c.id];
@@ -89,13 +89,15 @@ export function tickLoading(t: number) {
     }
     inv.loadOnto(c.id, run.truckId, stops.get(c.id) ?? 1, bay);
   }
-  if (run.trips.every((trip) => trip.skipped || trip.setAt <= t)) finish(run.truckId);
+  if (run.trips.every((trip) => trip.skipped || trip.setAt <= entityTime(trip.forkliftId, t))) finish(run.truckId);
 }
 
 /** Skip the animation: every unit still to come goes on now. */
 export function skipRun() {
   const run = useJobs.getState().run;
   if (!run) return;
+  // Holds no longer matter once the run is skipped.
+  useControl.getState().resume(Object.keys(run.routes));
   tickLoading(Math.max(run.t0, ...run.trips.map((trip) => trip.setAt)) + 0.01);
 }
 

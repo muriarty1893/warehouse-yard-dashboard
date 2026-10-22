@@ -138,7 +138,7 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
       const behind = floor(pose.x - c * 0.8, pose.y - sn * 0.8);
       root.current.rotation.z = Math.atan2(ahead - behind, 1.6);
       for (const w of wheels.current) w.rotation.z = -pose.odometer / (w.userData.radius as number);
-      const status = isHeld(spec.id) && !job ? `On hold · ${pose.status}` : pose.status;
+      const status = isHeld(spec.id) ? `On hold · ${pose.status}` : pose.status;
       if (statusRef.current && statusRef.current.textContent !== status) statusRef.current.textContent = status;
     } else if (spec.pose) {
       root.current.position.set(...yardToWorld(spec.pose.x, spec.pose.y, groundAt(spec.pose.x, spec.pose.y)));

@@ -145,7 +145,8 @@ export const useInventory = create<InventoryState>()(
         const s = get();
         const before = s.cargo.find((c) => c.id === id);
         if (!before) return;
-        const changed = (Object.keys(patch) as (keyof CargoPatch)[]).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(patch[k]));
+        // An unset flag and `false` are the same (fragile).
+        const changed = (Object.keys(patch) as (keyof CargoPatch)[]).filter((k) => JSON.stringify(before[k] ?? false) !== JSON.stringify(patch[k] ?? false));
         if (!changed.length) return;
         set({
           cargo: s.cargo.map((c) => (c.id === id ? { ...c, ...patch } : c)),
@@ -218,10 +219,13 @@ export const useInventory = create<InventoryState>()(
         const level = fill ?? s.fill;
         // Keep everything people touched (and whatever it stands on).
         const touched = new Set([...s.events.map((e) => e.cargoId), ...s.documents.filter((d) => d.source === 'manual').map((d) => d.cargoId)]);
-        const index = new Map(s.cargo.map((c) => [c.id, c]));
+        // Units loaded on a truck that was never dispatched left with it overnight.
+        const left = s.cargo.filter((c) => c.loadedOn);
+        const departures = left.map((c) => event(c.id, 'released', `Left the yard on ${c.loadedOn?.truckId} (new day)`));
+        const index = new Map(s.cargo.filter((c) => !c.loadedOn).map((c) => [c.id, c]));
         const keep = new Set<string>();
         for (const c of s.cargo) {
-          if (c.source !== 'manual' && !touched.has(c.id)) continue;
+          if (c.loadedOn || (c.source !== 'manual' && !touched.has(c.id))) continue;
           let cur: Cargo | undefined = c;
           while (cur && !keep.has(cur.id)) {
             keep.add(cur.id);
@@ -230,10 +234,10 @@ export const useInventory = create<InventoryState>()(
         }
         const kept = s.cargo.filter((c) => keep.has(c.id));
         const day = s.day + (fill && fill !== s.fill ? 0 : 1);
-        const cargo = demoCargo(level, day, kept);
+        const cargo = demoCargo(level, day, kept, left.map((c) => c.id));
         const fresh = cargo.filter((c) => !keep.has(c.id));
         const documents = [...s.documents.filter((d) => keep.has(d.cargoId) || !index.has(d.cargoId)), ...seedDocuments(fresh).map((d, i) => ({ ...d, id: `DOC-${String(s.docSerial + 1 + i).padStart(5, '0')}` }))];
-        set({ day, fill: level, cargo, documents, cargoSerial: Math.max(s.cargoSerial, serialOf(cargo)), docSerial: s.docSerial + fresh.length + 1, epoch: s.epoch + 1 });
+        set({ day, fill: level, cargo, documents, events: [...s.events, ...departures], cargoSerial: Math.max(s.cargoSerial, serialOf(cargo)), docSerial: s.docSerial + fresh.length + 1, epoch: s.epoch + 1 });
       },
 
       saveDocument: (input) => {

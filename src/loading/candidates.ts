@@ -62,6 +62,9 @@ export function planAll(inputs: TruckPlanInput[], cargo: Cargo[], confirmed: Rec
   const byId = new Map(cargo.map((c) => [c.id, c]));
   const plans: Record<string, LoadPlan> = {};
   const grid = buildGrid(cargo);
+  // Units a truck asked for by hand (urgent, included) are kept for it; the first truck in the queue wins a tie.
+  const reserved = new Map<string, string>();
+  for (const input of inputs) for (const id of [...input.urgent, ...input.include.map((i) => i.cargoId)]) if (!reserved.has(id)) reserved.set(id, input.truckId);
 
   for (const input of inputs) {
     const kept = confirmed[input.truckId];
@@ -69,7 +72,7 @@ export function planAll(inputs: TruckPlanInput[], cargo: Cargo[], confirmed: Rec
       plans[input.truckId] = kept;
       continue;
     }
-    const taken = new Set([...placedBy.keys()]);
+    const taken = new Set([...placedBy.keys(), ...[...reserved].filter(([, truck]) => truck !== input.truckId).map(([id]) => id)]);
     const { items, blocked } = candidatesFor(input, cargo, taken, grid);
     const core = buildPlan(vehicleById(input.vehicle), items, input.route);
     const units: LoadPlan['units'] = {};

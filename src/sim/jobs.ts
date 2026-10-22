@@ -3,13 +3,15 @@ import { devYard } from '../config/devYard';
 import { heightAt } from '../domain/yard';
 import { yardToBox } from '../loading/frame';
 import { vehicleById } from '../loading/vehicles';
+import { entityTime } from './control';
 import type { LoadingRun } from './loadingRun';
 import { compileRoute, evalRoute, type CompiledRoute, type RoutePose } from './route';
 
 /**
  * The loading run in progress (spec §3.1): its forklift routes compiled once,
  * and which units have left their yard spot. Forklifts on a job follow it
- * instead of their usual route.
+ * instead of their usual route. Job time is the forklift's own time, so a
+ * hold (or Stop all) stops it on its run too.
  */
 interface JobsState {
   run: LoadingRun | null;
@@ -30,7 +32,7 @@ export const useJobs = create<JobsState>((set, get) => ({
   tick: (t) => {
     const run = get().run;
     if (!run) return;
-    const picked = run.trips.filter((trip) => !trip.skipped && trip.pickAt <= t).map((trip) => trip.cargoId);
+    const picked = run.trips.filter((trip) => !trip.skipped && trip.pickAt <= entityTime(trip.forkliftId, t)).map((trip) => trip.cargoId);
     const now = get().hidden;
     if (picked.length !== now.size || picked.some((id) => !now.has(id))) set({ hidden: new Set(picked) });
   },
@@ -40,14 +42,15 @@ export const useJobs = create<JobsState>((set, get) => ({
 export function jobPose(forkliftId: string, t: number, out: RoutePose): RoutePose | null {
   const route = useJobs.getState().compiled[forkliftId];
   if (!route) return null;
-  evalRoute(route, t, out);
+  evalRoute(route, entityTime(forkliftId, t), out);
   return out.visible ? out : null;
 }
 
 /** The unit on a forklift's forks at time t. */
 export function carriedAt(forkliftId: string, t: number): string | null {
   const run = useJobs.getState().run;
-  return run?.trips.find((trip) => trip.forkliftId === forkliftId && !trip.skipped && trip.pickAt <= t && t < trip.setAt)?.cargoId ?? null;
+  const own = entityTime(forkliftId, t);
+  return run?.trips.find((trip) => trip.forkliftId === forkliftId && !trip.skipped && trip.pickAt <= own && own < trip.setAt)?.cargoId ?? null;
 }
 
 /** Floor height for a forklift: the truck's deck inside the box being loaded, else the yard's floor. */

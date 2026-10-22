@@ -50,10 +50,11 @@ function choose<T extends string>(u: number, weights: Partial<Record<T, number>>
   return entries[entries.length - 1][0];
 }
 
-export function demoCargo(fill: FillLevel, day: number, keep: Cargo[] = []): Cargo[] {
+/** `avoid`: ids that must not be handed out again (units that left the yard keep their history). */
+export function demoCargo(fill: FillLevel, day: number, keep: Cargo[] = [], avoid: Iterable<string> = []): Cargo[] {
   const level = FILL_LEVELS[fill];
   const rng = mulberry32(18492 + day * 7919);
-  const taken = new Set(keep.map((c) => c.id));
+  const taken = new Set([...keep.map((c) => c.id), ...avoid]);
   let serial = 18400;
   const nextId = () => {
     do serial += 1;

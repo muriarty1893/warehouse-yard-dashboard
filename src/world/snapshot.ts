@@ -458,7 +458,7 @@ function forkliftState(m: (typeof forkliftModels)[number], t: number): ForkliftS
     return {
       ...common,
       status: JOB_STATUS[job.phase ?? ''] ?? 'returning',
-      detail: job.status,
+      detail: useControl.getState().holds[spec.id] !== undefined ? `On hold · ${job.status}` : job.status,
       battery: Math.max(15, spec.battery - t * 0.012),
       carrying: carriedAt(spec.id, t),
       movesToday: m.base,
@@ -467,7 +467,7 @@ function forkliftState(m: (typeof forkliftModels)[number], t: number): ForkliftS
       x: job.x,
       y: job.y,
       scripted: true,
-      held: false,
+      held: useControl.getState().holds[spec.id] !== undefined,
     };
   }
   if (!route) {

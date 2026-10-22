@@ -78,6 +78,14 @@ describe('planAll', () => {
     for (const l of overflow) expect(plans['TRUCK-110'].placements.map((p) => p.cargoId)).toContain(l.cargoId);
   });
 
+  it('a unit marked urgent for a later truck is kept for it', () => {
+    const first = planAll(inputs(), cargo, {});
+    const unit = first['TRUCK-102'].placements.find((p) => byId.get(p.cargoId)!.destination === 'Ankara')!.cargoId;
+    const plans = planAll([input('TRUCK-102'), input('TRUCK-109'), input('TRUCK-110', { urgent: [unit] })], cargo, {});
+    expect(plans['TRUCK-102'].placements.map((p) => p.cargoId)).not.toContain(unit);
+    expect(plans['TRUCK-110'].placements.map((p) => p.cargoId)).toContain(unit);
+  });
+
   it('a unit is planned on at most one truck', () => {
     const plans = planAll(inputs(), cargo, {});
     const ids = Object.values(plans).flatMap((p) => p.placements.map((x) => x.cargoId));

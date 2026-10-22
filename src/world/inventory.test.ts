@@ -67,6 +67,23 @@ describe('loading cargo onto trucks', () => {
   });
 });
 
+describe('history stays honest', () => {
+  it('saving an edit that changes nothing logs nothing', () => {
+    const unit = freeFloorUnits().find((c) => !c.fragile)!;
+    const before = useInventory.getState().events.length;
+    useInventory.getState().update(unit.id, { description: unit.description, weightKg: unit.weightKg, fragile: false });
+    expect(useInventory.getState().events.length).toBe(before);
+  });
+
+  it('a new day sends loaded units off with their truck', () => {
+    const unit = freeFloorUnits()[0];
+    useInventory.getState().loadOnto(unit.id, 'TRUCK-102', 1, 'L1');
+    useInventory.getState().newDay();
+    expect(useInventory.getState().cargo.find((c) => c.id === unit.id)).toBeUndefined();
+    expect(useInventory.getState().events.some((e) => e.cargoId === unit.id && e.kind === 'released' && e.text === 'Left the yard on TRUCK-102 (new day)')).toBe(true);
+  });
+});
+
 describe('saved data', () => {
   it('migration from v2 keeps manual records and flags fragile goods', () => {
     const cargo = demoCargo('normal', 1).map(({ fragile: _f, ...c }) => c as Cargo);
