@@ -11,6 +11,7 @@ export function buildPlan(v: VehicleSpec, items: PackItem[], route: string[], op
     route.length,
   );
   const { l: L, w: W, h: H } = v.inner;
+  const urgent = new Set(items.filter((i) => i.urgent).map((i) => i.id));
 
   const n = Math.max(1, Math.round(L / 1.2));
   const rows: RowStat[] = Array.from({ length: n }, (_, i) => {
@@ -47,6 +48,7 @@ export function buildPlan(v: VehicleSpec, items: PackItem[], route: string[], op
     seed: opts.seed ?? 0,
     stats: {
       units: placements.length,
+      urgent: placements.filter((p) => urgent.has(p.cargoId)).length,
       candidates: items.length,
       weightKg,
       remainingKg: v.payloadKg - weightKg,

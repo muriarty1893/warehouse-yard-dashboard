@@ -147,6 +147,8 @@ export interface RowStat {
 
 export interface PlanStats {
   units: number;
+  /** Urgent units placed. */
+  urgent: number;
   /** Route units considered, including the ones that can never go (blocked). */
   candidates: number;
   weightKg: number;
