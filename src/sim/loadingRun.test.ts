@@ -14,7 +14,7 @@ const L1 = bayById('L1');
 const v = vehicleById('rigid-26');
 const forklifts: { id: string; start: Pose }[] = [
   { id: 'FL-01', start: { x: 33.0, y: 31.2, heading: 0 } },
-  { id: 'FL-03', start: { x: 2.1, y: 29.5, heading: Math.PI / 2 } },
+  { id: 'FL-02', start: { x: 19.4, y: 20.6, heading: 0 } },
 ];
 const plan = planAll([{ truckId: 'TRUCK-102', route: DEFAULT_ROUTES['TRUCK-102'], vehicle: 'rigid-26', include: [], exclude: [], urgent: [] }], cargo, {})['TRUCK-102'];
 const run = buildLoadingRun({ truckId: 'TRUCK-102', bay: L1, vehicle: v, placements: plan.placements, cargo, forklifts, t0: 100 });
@@ -41,7 +41,8 @@ function inTruck(r: LoadingRun) {
 describe('loading run', () => {
   it('has a trip per planned unit, alternating forklifts', () => {
     expect(run.trips.map((t) => t.cargoId)).toEqual([...plan.placements].sort((a, b) => a.seq - b.seq).map((p) => p.cargoId));
-    expect(new Set(run.trips.map((t) => t.forkliftId))).toEqual(new Set(['FL-01', 'FL-03']));
+    expect(Object.keys(run.routes).sort()).toEqual(['FL-01', 'FL-02']);
+    expect(new Set(run.trips.filter((t) => !t.skipped).map((t) => t.forkliftId))).toEqual(new Set(['FL-01', 'FL-02']));
     expect(run.trips.filter((t) => !t.skipped).length).toBeGreaterThan(plan.placements.length / 2);
   });
 
@@ -61,6 +62,25 @@ describe('loading run', () => {
       expect(t.pickAt).toBeGreaterThan(100);
       expect(t.setAt).toBeGreaterThan(t.pickAt);
     }
+  });
+
+  it('takes the first two forklifts that can reach the dock', () => {
+    const cutOff: Pose = { x: 2.1, y: 29.5, heading: Math.PI / 2 };
+    const r = buildLoadingRun({
+      truckId: 'TRUCK-102',
+      bay: L1,
+      vehicle: v,
+      placements: plan.placements,
+      cargo,
+      forklifts: [
+        { id: 'FL-01', start: forklifts[0].start },
+        { id: 'FL-03', start: cutOff },
+        { id: 'FL-02', start: forklifts[1].start },
+      ],
+      t0: 0,
+    });
+    expect(Object.keys(r.routes).sort()).toEqual(['FL-01', 'FL-02']);
+    expect(r.notes.join(' ')).toMatch(/FL-03 cannot reach the dock/);
   });
 
   it('boxed-in unit is skipped with a reason', () => {

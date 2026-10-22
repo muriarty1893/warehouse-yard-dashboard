@@ -1,4 +1,4 @@
-import { CheckCircle2, Flame, Sparkles, Truck, Undo2, X } from 'lucide-react';
+import { CheckCircle2, Eye, FastForward, Flame, LogOut, Play, RotateCcw, Sparkles, Truck, Undo2, X } from 'lucide-react';
 import { useState } from 'react';
 import { candidatesFor } from '../../loading/candidates';
 import { bayOfTruck } from '../../loading/frame';
@@ -7,6 +7,10 @@ import { planOf, useLoading } from '../../loading/store';
 import { vehicleById } from '../../loading/vehicles';
 import { useUi } from '../../state/ui';
 import { useView, type PlannerView } from '../../state/view';
+import { frameTruck } from './camera';
+import { clock } from '../../sim/clock';
+import { skipRun, startLoading } from '../../sim/dockRun';
+import { carriedAt, useJobs } from '../../sim/jobs';
 import { useInventory } from '../../world/inventory';
 import { Button, IconButton, Segmented } from '../kit';
 import { Logo, TimeControls } from '../TopBar';
@@ -30,13 +34,26 @@ async function optimiseTruck(truckId: string) {
   useUi.getState().notify(`${r.tried.toLocaleString('en-US')} layouts in ${Math.round(r.ms)} ms · best kept`);
 }
 
+/** Camera on the forklift that has a unit on its forks (else the first one on the run). */
+function followLoading() {
+  const run = useJobs.getState().run;
+  if (!run) return;
+  const busy = Object.keys(run.routes).find((id) => carriedAt(id, clock.t)) ?? Object.keys(run.routes)[0];
+  if (busy) useView.getState().setFollow({ kind: 'forklift', id: busy });
+}
+
 function Actions({ truckId }: { truckId: string }) {
   const status = useLoading((s) => s.trucks[truckId]?.status);
   const plan = useLoading((s) => planOf(s, truckId));
+  const running = useJobs((s) => s.run?.truckId ?? null);
+  const following = useView((s) => s.follow?.kind === 'forklift');
+  const loaded = useInventory((s) => s.cargo.filter((c) => c.loadedOn?.truckId === truckId).length);
+  const atDock = bayOfTruck(truckId)?.kind === 'loading';
   const [busy, setBusy] = useState(false);
   const notify = useUi((s) => s.notify);
   const openDialog = useUi((s) => s.openDialog);
   if (!plan) return null;
+  const loadBlocked = !atDock ? 'Not at a loading bay' : running && running !== truckId ? `${running} is being loaded` : null;
   const confirm = () => {
     if (!plan.checks.ok) return openDialog({ kind: 'confirm', truckId });
     const r = useLoading.getState().confirm(truckId);
@@ -66,8 +83,61 @@ function Actions({ truckId }: { truckId: string }) {
         </>
       )}
       {status === 'confirmed' && (
-        <Button onClick={() => useLoading.getState().reopen(truckId)} title="Back to a draft you can change">
-          <Undo2 size={15} /> Re-open
+        <>
+          <Button onClick={() => useLoading.getState().reopen(truckId)} title="Back to a draft you can change">
+            <Undo2 size={15} /> Re-open
+          </Button>
+          <Button
+            tone="primary"
+            disabled={!!loadBlocked}
+            title={loadBlocked ?? 'Forklifts bring the units from the yard into the truck'}
+            onClick={() => {
+              const r = startLoading(truckId, clock.t);
+              if (!r.ok) notify(r.reason, 'error');
+            }}
+          >
+            <Play size={15} /> Load at dock
+          </Button>
+        </>
+      )}
+      {status === 'loading' && (
+        <>
+          <span className="px-2 text-[12px] font-semibold text-muted tabular-nums">
+            {loaded}/{plan.placements.length} loaded
+          </span>
+          <Button
+            tone={following ? 'primary' : 'ghost'}
+            onClick={() => {
+              if (!following) return followLoading();
+              useView.getState().setFollow(null);
+              frameTruck(truckId, useView.getState().plannerView);
+            }}
+            title="Keep the camera on the forklift"
+          >
+            <Eye size={15} /> Follow
+          </Button>
+          <Button tone="primary" onClick={skipRun} title="Finish the loading now">
+            <FastForward size={15} /> Skip
+          </Button>
+        </>
+      )}
+      {status === 'loaded' && (
+        <Button
+          tone="primary"
+          onClick={() => {
+            const n = useInventory.getState().dispatch(truckId);
+            useLoading.getState().setStatus(truckId, 'dispatched');
+            useView.getState().setFollow(null);
+            notify(`${n} units left the yard on ${truckId}`);
+          }}
+          title="The truck leaves with its load"
+        >
+          <LogOut size={15} /> Dispatch
+        </Button>
+      )}
+      {status === 'dispatched' && (
+        <Button tone="primary" onClick={() => useLoading.getState().newPlan(truckId)} title="Start planning this truck's next load">
+          <RotateCcw size={15} /> New plan
         </Button>
       )}
     </div>
@@ -98,7 +168,7 @@ export function PlannerTopBar({ truckId }: { truckId: string }) {
       <TimeControls />
       <div className="flex-1" />
       <div className="pointer-events-auto w-[240px]">
-        <Segmented value={view} options={VIEWS} onChange={setView} />
+        <Segmented value={view} options={VIEWS} onChange={(v) => (v === view ? frameTruck(truckId, v) : setView(v))} />
       </div>
       <Actions truckId={truckId} />
       <div className="pointer-events-auto rounded-xl bg-white/90">

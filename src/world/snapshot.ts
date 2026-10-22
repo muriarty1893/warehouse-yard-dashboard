@@ -11,6 +11,7 @@ import type { EntityRef } from '../state/ui';
 import type { Overlay } from '../state/layers';
 import { labelledCargo, useInventory } from './inventory';
 import { inYard } from './placement';
+import { carriedAt, jobPose } from '../sim/jobs';
 import { planOf, useLoading, type PlanStatus } from '../loading/store';
 import { fmtClock, fmtDuration } from './time';
 
@@ -447,9 +448,28 @@ function truckState(m: TruckModel, t: number): TruckState {
   };
 }
 
+const JOB_STATUS: Record<string, ForkliftStatus> = { picking: 'picking', carrying: 'carrying', working: 'loading', returning: 'returning' };
+
 function forkliftState(m: (typeof forkliftModels)[number], t: number): ForkliftState {
   const { spec, route } = m;
   const common = { id: spec.id, operator: spec.operator, model: spec.model, charger: spec.charger };
+  const job = jobPose(spec.id, t, tmp);
+  if (job) {
+    return {
+      ...common,
+      status: JOB_STATUS[job.phase ?? ''] ?? 'returning',
+      detail: job.status,
+      battery: Math.max(15, spec.battery - t * 0.012),
+      carrying: carriedAt(spec.id, t),
+      movesToday: m.base,
+      speedKmh: 0,
+      where: whereIs(job.x, job.y),
+      x: job.x,
+      y: job.y,
+      scripted: true,
+      held: false,
+    };
+  }
   if (!route) {
     const p = spec.pose ?? { x: 0, y: 0, heading: 0 };
     const charging = spec.status.startsWith('Charging');

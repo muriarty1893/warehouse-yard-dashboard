@@ -76,7 +76,7 @@ export const useUi = create<UiState>((set, get) => ({
 }));
 
 useUi.subscribe((s) => {
-  document.body.style.cursor = s.hovered ? 'pointer' : s.placing ? 'crosshair' : '';
+  if (typeof document !== 'undefined') document.body.style.cursor = s.hovered ? 'pointer' : s.placing ? 'crosshair' : '';
 });
 
 /** Is this entity hovered or selected? Components re-render only when it flips. */

@@ -1,10 +1,12 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { groundAt, type ForkliftSpec } from '../../config/fleet';
 import { FORKLIFT } from '../../domain/vehicles';
 import { clock } from '../../sim/clock';
 import { entityTime, isHeld } from '../../sim/control';
+import { carriedAt, floorAt, jobPose } from '../../sim/jobs';
+import { CarriedUnit } from '../loading/CarriedUnit';
 import { useLayers } from '../../state/layers';
 import { compileRoute, evalRoute, newPose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
@@ -43,11 +45,13 @@ function ForkLoad({ load }: { load: Load }) {
   );
 }
 
-function ForkliftModel({ carriage, beacon, loadRef, load, spin }: {
+function ForkliftModel({ carriage, beacon, loadRef, load, carried, spin }: {
   carriage: RefObject<THREE.Group | null>;
   beacon: RefObject<THREE.MeshStandardMaterial | null>;
   loadRef: RefObject<THREE.Group | null>;
   load: Load;
+  /** A real cargo unit on the forks (loading runs), instead of the generic load. */
+  carried: string | null;
   spin?: (g: THREE.Group | null) => void;
 }) {
   const yellow = mat(palette.forklift, { roughness: 0.45 });
@@ -84,6 +88,7 @@ function ForkliftModel({ carriage, beacon, loadRef, load, spin }: {
         <group ref={loadRef}>
           <ForkLoad load={load} />
         </group>
+        {carried && <CarriedUnit cargoId={carried} />}
       </group>
       <Wheel r={0.33} w={0.26} position={[0.45, 0.33, 0.48]} spin={spin} />
       <Wheel r={0.33} w={0.26} position={[0.45, 0.33, -0.48]} spin={spin} />
@@ -108,6 +113,8 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
   const unhover = useUi((s) => s.unhover);
   const select = useUi((s) => s.select);
   const ref = useMemo(() => ({ kind: 'forklift' as const, id: spec.id }), [spec.id]);
+  const [carried, setCarried] = useState<string | null>(null);
+  const carriedRef = useRef<string | null>(null);
 
   useEffect(() => {
     registerEntity(ref, root.current);
@@ -116,23 +123,35 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
 
   useFrame(() => {
     if (!root.current || !carriage.current || !loadRef.current) return;
-    if (route) {
-      evalRoute(route, entityTime(spec.id, clock.t), pose);
-      root.current.position.set(...yardToWorld(pose.x, pose.y, groundAt(pose.x, pose.y)));
+    // A loading run's job takes over from the usual route while it lasts.
+    const job = jobPose(spec.id, clock.t, pose);
+    const moving = !!job || !!route;
+    if (!job && route) evalRoute(route, entityTime(spec.id, clock.t), pose);
+    if (moving) {
+      const floor = job ? floorAt : groundAt;
+      root.current.position.set(...yardToWorld(pose.x, pose.y, floor(pose.x, pose.y)));
       root.current.rotation.y = pose.heading;
       // Pitch with the floor (ramp): compare floor height ahead and behind.
       const c = Math.cos(pose.heading);
       const sn = Math.sin(pose.heading);
-      const ahead = groundAt(pose.x + c * 0.8, pose.y + sn * 0.8);
-      const behind = groundAt(pose.x - c * 0.8, pose.y - sn * 0.8);
+      const ahead = floor(pose.x + c * 0.8, pose.y + sn * 0.8);
+      const behind = floor(pose.x - c * 0.8, pose.y - sn * 0.8);
       root.current.rotation.z = Math.atan2(ahead - behind, 1.6);
       for (const w of wheels.current) w.rotation.z = -pose.odometer / (w.userData.radius as number);
-      const status = isHeld(spec.id) ? `On hold · ${pose.status}` : pose.status;
+      const status = isHeld(spec.id) && !job ? `On hold · ${pose.status}` : pose.status;
       if (statusRef.current && statusRef.current.textContent !== status) statusRef.current.textContent = status;
+    } else if (spec.pose) {
+      root.current.position.set(...yardToWorld(spec.pose.x, spec.pose.y, groundAt(spec.pose.x, spec.pose.y)));
+      root.current.rotation.set(0, spec.pose.heading, 0);
     }
-    carriage.current.position.y = route ? pose.fork : 0.12;
-    loadRef.current.visible = route ? pose.carry : false;
-    if (beacon.current) beacon.current.emissiveIntensity = route && !isHeld(spec.id) ? 0.4 + 0.8 * Math.max(0, Math.sin(clock.t * 7)) : 0.15;
+    const unit = job ? carriedAt(spec.id, clock.t) : null;
+    if (unit !== carriedRef.current) {
+      carriedRef.current = unit;
+      setCarried(unit);
+    }
+    carriage.current.position.y = moving ? pose.fork : 0.12;
+    loadRef.current.visible = moving ? pose.carry && !job : false;
+    if (beacon.current) beacon.current.emissiveIntensity = moving && !isHeld(spec.id) ? 0.4 + 0.8 * Math.max(0, Math.sin(clock.t * 7)) : 0.15;
   });
 
   const p = spec.pose ?? { x: 0, y: 0, heading: 0 };
@@ -161,13 +180,10 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
         beacon={beacon}
         loadRef={loadRef}
         load={spec.load ?? 'cartons'}
-        spin={
-          route
-            ? (g) => {
-                if (g && !wheels.current.includes(g)) wheels.current.push(g);
-              }
-            : undefined
-        }
+        carried={carried}
+        spin={(g) => {
+          if (g && !wheels.current.includes(g)) wheels.current.push(g);
+        }}
         />
       </Merge>
       {(highlight || tags) && (

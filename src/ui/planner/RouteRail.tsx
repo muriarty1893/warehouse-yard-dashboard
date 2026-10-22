@@ -7,6 +7,7 @@ import { vehicleById } from '../../loading/vehicles';
 import { useInventory } from '../../world/inventory';
 import { inYard } from '../../world/placement';
 import { yardSeconds } from '../../world/time';
+import { useJobs } from '../../sim/jobs';
 import { useWorld } from '../../world/store';
 import { Button } from '../kit';
 import { stopColor } from './format';
@@ -99,6 +100,7 @@ export function StatusNote({ truckId }: { truckId: string }) {
   const t = useLoading((s) => s.trucks[truckId]);
   const plan = useLoading((s) => planOf(s, truckId));
   const cargo = useInventory((s) => s.cargo);
+  const runNotes = useJobs((s) => (s.run?.truckId === truckId ? s.run.notes : null));
   if (!t || !plan) return null;
   const stale = !t.keptOutdated ? outdated(t, cargo) : null;
   const bay = bayOfTruck(truckId);
@@ -115,6 +117,9 @@ export function StatusNote({ truckId }: { truckId: string }) {
         <div className="min-w-0">
           {text && <div className="font-semibold text-ink">{text}</div>}
           {plan.clearance > 0 && !stale && <div>{plan.clearance.toFixed(2)} m kept clear at the front wall to take weight off the front axle</div>}
+          {runNotes?.map((n) => (
+            <div key={n}>Loading run: {n}</div>
+          ))}
         </div>
       </div>
       {stale && (

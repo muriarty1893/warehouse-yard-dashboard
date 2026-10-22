@@ -47,6 +47,10 @@ function tidy(points: Vec2[]): Vec2[] {
   return out.length > 1 ? out : [out[0], out[0]];
 }
 
+/** How many forklifts work a run. */
+const CREW = 2;
+
+/** `forklifts` in order of preference; the first two that can reach the dock do the run. */
 export function buildLoadingRun(args: { truckId: string; bay: TruckBay; vehicle: VehicleSpec; placements: Placement[]; cargo: Cargo[]; forklifts: { id: string; start: Pose }[]; t0: number }): LoadingRun {
   const { truckId, bay, vehicle: v, cargo, t0 } = args;
   const pose = truckPoseFor(bay, v);
@@ -59,10 +63,16 @@ export function buildLoadingRun(args: { truckId: string; bay: TruckBay; vehicle:
   const index = new Map(cargo.map((c) => [c.id, c]));
   const spec = (legs: Leg[]): RouteSpec => ({ legs, speed: SPEED, accel: ACCEL, once: true, offset: t0 });
   const duration = (legs: Leg[]) => (legs.length ? compileRoute(spec(legs)).duration : 0);
-  const fleet = args.forklifts.map((f) => ({ id: f.id, at: [f.start.x, f.start.y] as Vec2, legs: [] as Leg[] }));
   const marks: { trip: Trip; legs: Leg[]; lift: number; set: number }[] = [];
   const trips: Trip[] = [];
   const notes: string[] = [];
+  const fleet: { id: string; at: Vec2; legs: Leg[] }[] = [];
+  for (const f of args.forklifts) {
+    if (fleet.length === CREW) break;
+    const at: Vec2 = [f.start.x, f.start.y];
+    if (findPath(grid, at, dock)) fleet.push({ id: f.id, at, legs: [] });
+    else notes.push(`${f.id} cannot reach the dock`);
+  }
   /** Run time (s) the truck was last left by a forklift. */
   let free = -Infinity;
   let turn = 0;
