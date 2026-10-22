@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import type { TruckSpec } from '../../config/fleet';
 import type { Carrier } from '../../domain/types';
 import type { TruckKind } from '../../domain/vehicles';
+import { bayOfTruck, rigidLayout, truckPoseFor } from '../../loading/frame';
+import type { VehicleSpec } from '../../loading/types';
+import { VEHICLES } from '../../loading/vehicles';
 import { clock } from '../../sim/clock';
 import { entityTime, isHeld } from '../../sim/control';
 import { useLayers } from '../../state/layers';
@@ -86,19 +89,98 @@ function Cab({ front, carrier, tall = 2.55 }: { front: number; carrier: Carrier;
   );
 }
 
-function RigidTruck({ carrier, doorsOpen, spin }: { carrier: Carrier; doorsOpen: boolean; spin?: Spin }) {
+/**
+ * Load space opened up for the planner: floor, front wall and frame, with the
+ * side wall nearest the camera turned to glass (and the roof left off) so the
+ * packed cargo shows. Drawn live, outside <Merge>, as its walls swap.
+ */
+function CutawayBox({ v, carrier }: { v: VehicleSpec; carrier: Carrier }) {
+  const group = useRef<THREE.Group>(null);
+  const walls = useRef<(THREE.Mesh | null)[]>([]);
+  const panels = useRef<(THREE.Mesh | null)[]>([]);
+  const front = v.model.frontWall + 0.1;
+  const rear = -v.model.doorsToOrigin;
+  const length = front - rear;
+  const cx = (front + rear) / 2;
+  const h = v.inner.h + 0.2;
+  const y0 = v.deck - 0.045;
+  const hw = 1.275;
+  const solid = mat(palette.white);
+  const glass = mat('#c9d6f2', { transparent: true, opacity: 0.18 });
+  const tex = sideTexture(carrier, (length - 0.4) / (h - 0.35));
+  const livery = useMemo(() => new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }), [tex]);
+  const local = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera }) => {
+    if (!group.current) return;
+    group.current.worldToLocal(local.copy(camera.position));
+    // Wall 0 is on local +z; the one facing the camera goes see-through.
+    const near = local.z > 0 ? 0 : 1;
+    walls.current.forEach((w, i) => {
+      if (w) w.material = i === near ? glass : solid;
+    });
+    panels.current.forEach((p, i) => {
+      if (p) p.visible = i !== near;
+    });
+  });
+  const frame = '#c3cad8';
+  return (
+    <group ref={group} userData={{ noMerge: true }}>
+      <Box size={[length, 0.09, 2 * hw]} position={[cx, y0, 0]} color="#d9dde6" />
+      <Box size={[0.08, h, 2 * hw]} position={[front - 0.04, y0 + h / 2, 0]} material={solid} />
+      {[1, -1].map((side, i) => (
+        <group key={side}>
+          <mesh
+            ref={(m) => {
+              walls.current[i] = m;
+            }}
+            geometry={unitBox}
+            material={solid}
+            position={[cx, y0 + h / 2, side * (hw - 0.02)]}
+            scale={[length, h, 0.04]}
+            receiveShadow
+          />
+          <mesh
+            ref={(m) => {
+              panels.current[i] = m;
+            }}
+            material={livery}
+            position={[cx, y0 + h / 2 + 0.02, side * (hw + 0.004)]}
+            rotation={[0, side > 0 ? 0 : Math.PI, 0]}
+          >
+            <planeGeometry args={[length - 0.4, h - 0.35]} />
+          </mesh>
+          <Box size={[length, 0.08, 0.08]} position={[cx, y0 + h, side * hw]} color={frame} />
+          <Box size={[0.08, h, 0.08]} position={[front - 0.04, y0 + h / 2, side * hw]} color={frame} />
+          <Box size={[0.08, h, 0.08]} position={[rear + 0.04, y0 + h / 2, side * hw]} color={frame} />
+        </group>
+      ))}
+      <Box size={[0.08, 0.08, 2 * hw]} position={[front - 0.04, y0 + h, 0]} color={frame} />
+      <Box size={[0.08, 0.08, 2 * hw]} position={[rear + 0.04, y0 + h, 0]} color={frame} />
+    </group>
+  );
+}
+
+function RigidTruck({ v, carrier, doorsOpen, cutaway, spin }: { v: VehicleSpec; carrier: Carrier; doorsOpen: boolean; cutaway: boolean; spin?: Spin }) {
+  const r = rigidLayout(v);
+  const lastRear = Math.max(...r.rearAxles);
+  const rail = r.frontAxle - lastRear - 1.9;
+  const railX = (lastRear + r.frontAxle) / 2 - 1.65;
   return (
     <group>
-      <Box size={[8.6, 0.32, 1.0]} position={[1.9, 0.72, 0]} color={palette.dark} />
-      <RBox size={[7.7, 2.85, 2.55]} position={[0.45, 2.48, 0]} color={palette.white} radius={0.1} />
-      <SidePanels carrier={carrier} length={7.3} height={2.5} x={0.45} y={2.5} halfWidth={1.275} />
-      <RearDoors rearX={-3.4} y0={1.05} h={2.85} open={doorsOpen} />
-      <Cab front={7.05} carrier={carrier} />
-      <Cyl r={0.3} h={1.0} position={[3.4, 0.72, 1.0]} rotation={[0, 0, Math.PI / 2]} color="#c3cad8" />
-      <Box size={[3.4, 0.08, 0.05]} position={[1.0, 0.72, 1.22]} color="#b4bccd" />
-      <Box size={[3.4, 0.08, 0.05]} position={[1.0, 0.72, -1.22]} color="#b4bccd" />
-      {[0, -1.3].map((x) => [1, -1].map((s) => <Wheel key={`${x}${s}`} r={0.5} w={0.55} position={[x, 0.5, s * 0.98]} spin={spin} />))}
-      {[1, -1].map((s) => <Wheel key={s} r={0.5} w={0.36} position={[5.3, 0.5, s * 1.05]} spin={spin} />)}
+      <Box size={[r.frame.l, 0.32, 1.0]} position={[r.frame.x, 0.72, 0]} color={palette.dark} />
+      {!cutaway && (
+        <>
+          <RBox size={[r.boxLength, r.boxHeight, 2.55]} position={[r.boxCenter, r.boxY, 0]} color={palette.white} radius={0.1} />
+          <SidePanels carrier={carrier} length={r.boxLength - 0.4} height={r.boxHeight - 0.35} x={r.boxCenter} y={r.boxY + 0.02} halfWidth={1.275} />
+        </>
+      )}
+      <RearDoors rearX={r.rearX} y0={v.deck - 0.05} h={r.boxHeight} open={doorsOpen || cutaway} />
+      <Cab front={r.cabFront} carrier={carrier} />
+      <Cyl r={0.3} h={1.0} position={[r.frontAxle - 1.9, 0.72, 1.0]} rotation={[0, 0, Math.PI / 2]} color="#c3cad8" />
+      <Box size={[rail, 0.08, 0.05]} position={[railX, 0.72, 1.22]} color="#b4bccd" />
+      <Box size={[rail, 0.08, 0.05]} position={[railX, 0.72, -1.22]} color="#b4bccd" />
+      {r.rearAxles.map((x) => [1, -1].map((s) => <Wheel key={`${x}${s}`} r={0.5} w={0.55} position={[x, 0.5, s * 0.98]} spin={spin} />))}
+      {[1, -1].map((s) => <Wheel key={s} r={0.5} w={0.36} position={[r.frontAxle, 0.5, s * 1.05]} spin={spin} />)}
     </group>
   );
 }
@@ -126,13 +208,17 @@ function TrailerAxles({ spin }: { spin?: Spin }) {
   );
 }
 
-function Trailer({ carrier, doorsOpen, standalone, spin }: { carrier: Carrier; doorsOpen: boolean; standalone: boolean; spin?: Spin }) {
+function Trailer({ carrier, doorsOpen, standalone, cutaway = false, spin }: { carrier: Carrier; doorsOpen: boolean; standalone: boolean; cutaway?: boolean; spin?: Spin }) {
   return (
     <group>
       <Box size={[12.5, 0.25, 1.0]} position={[-6.3, 1.15, 0]} color={palette.dark} />
-      <RBox size={[13.6, 2.75, 2.55]} position={[-5.9, 2.68, 0]} color={palette.white} radius={0.1} />
-      <SidePanels carrier={carrier} length={12.9} height={2.4} x={-5.9} y={2.7} halfWidth={1.275} />
-      <RearDoors rearX={-12.7} y0={1.3} h={2.75} open={doorsOpen} />
+      {!cutaway && (
+        <>
+          <RBox size={[13.6, 2.75, 2.55]} position={[-5.9, 2.68, 0]} color={palette.white} radius={0.1} />
+          <SidePanels carrier={carrier} length={12.9} height={2.4} x={-5.9} y={2.7} halfWidth={1.275} />
+        </>
+      )}
+      <RearDoors rearX={-12.7} y0={1.3} h={2.75} open={doorsOpen || cutaway} />
       <Box size={[6, 0.1, 0.05]} position={[-5, 0.95, 1.22]} color="#b4bccd" />
       <Box size={[6, 0.1, 0.05]} position={[-5, 0.95, -1.22]} color="#b4bccd" />
       {standalone && (
@@ -148,14 +234,14 @@ function Trailer({ carrier, doorsOpen, standalone, spin }: { carrier: Carrier; d
   );
 }
 
-function ContainerChassis({ color, spin }: { color: string; spin?: Spin }) {
+function ContainerChassis({ color, cutaway = false, spin }: { color: string; cutaway?: boolean; spin?: Spin }) {
   const materials = useMemo(() => containerMaterials('MARLIN', color, true), [color]);
   return (
     <group>
       <Box size={[12.4, 0.3, 1.0]} position={[-6.0, 1.15, 0]} color={palette.dark} />
       <Box size={[0.3, 0.2, 2.4]} position={[-0.4, 1.25, 0]} color={palette.dark} />
       <Box size={[0.3, 0.2, 2.4]} position={[-12.0, 1.25, 0]} color={palette.dark} />
-      <mesh geometry={unitBox} material={materials} position={[-6.15, 2.65, 0]} scale={[12.19, 2.59, 2.44]} castShadow receiveShadow />
+      {!cutaway && <mesh geometry={unitBox} material={materials} position={[-6.15, 2.65, 0]} scale={[12.19, 2.59, 2.44]} castShadow receiveShadow />}
       <TrailerAxles spin={spin} />
     </group>
   );
@@ -168,8 +254,13 @@ const TRUCK_BOUNDS: Record<TruckKind, { x: number; l: number; top: number }> = {
   container: { x: -3.8, l: 17.9, top: 4.25 },
 };
 
-/** A truck in the yard: static in a bay, or following a scripted route. */
-export function Truck({ spec, interactive = true }: { spec: TruckSpec; interactive?: boolean }) {
+const modelKind = (v: VehicleSpec): TruckKind => (v.model.kind === 'rigid' ? 'rigid' : v.model.kind);
+
+/**
+ * A truck in the yard: static in a bay, or following a scripted route. In the
+ * load planner the planned truck shows the chosen vehicle, opened up.
+ */
+export function Truck({ spec, interactive = true, plannerVehicle, cutaway = false }: { spec: TruckSpec; interactive?: boolean; plannerVehicle?: VehicleSpec; cutaway?: boolean }) {
   const root = useRef<THREE.Group>(null);
   const front = useRef<THREE.Group>(null);
   const rear = useRef<THREE.Group>(null);
@@ -223,8 +314,10 @@ export function Truck({ spec, interactive = true }: { spec: TruckSpec; interacti
     }
   });
 
-  const kind = spec.kind;
-  const p = spec.pose ?? { x: 0, y: 0, heading: 0 };
+  const kind = plannerVehicle ? modelKind(plannerVehicle) : spec.kind;
+  const body = plannerVehicle ?? VEHICLES[spec.body ?? 'rigid-26'];
+  const plannedBay = plannerVehicle ? bayOfTruck(spec.id) : null;
+  const p = plannerVehicle && plannedBay ? truckPoseFor(plannedBay, plannerVehicle) : (spec.pose ?? { x: 0, y: 0, heading: 0 });
   const hasTractor = kind === 'semi' || kind === 'container';
   const b = TRUCK_BOUNDS[kind];
 
@@ -259,11 +352,12 @@ export function Truck({ spec, interactive = true }: { spec: TruckSpec; interacti
       }
     >
       <group ref={front} rotation={[0, p.heading, 0]}>
-        <Merge deps={[doorsOpen]}>
-          {kind === 'rigid' && <RigidTruck carrier={spec.carrier} doorsOpen={doorsOpen} spin={spin} />}
+        <Merge deps={[doorsOpen, cutaway, body.id, kind]}>
+          {kind === 'rigid' && <RigidTruck v={body} carrier={spec.carrier} doorsOpen={doorsOpen} cutaway={cutaway} spin={spin} />}
           {hasTractor && <Tractor carrier={spec.carrier} spin={spin} />}
         </Merge>
-        {(highlight || tags) && onMap && (
+        {cutaway && kind === 'rigid' && <CutawayBox v={body} carrier={spec.carrier} />}
+        {(highlight || tags) && onMap && !cutaway && (
           <group position={[b.x, 0, 0]}>
             {highlight && <Brackets size={[b.l + 0.4, b.top, 2.9]} strong={highlight === 'selected'} />}
             <Tag y={b.top + 1.2} title={spec.id} subtitle={spec.status || LIVERIES[spec.carrier].name} statusRef={statusRef} />
@@ -272,13 +366,14 @@ export function Truck({ spec, interactive = true }: { spec: TruckSpec; interacti
       </group>
       {(hasTractor || kind === 'trailer') && (
         <group ref={rear} rotation={[0, p.heading, 0]}>
-          <Merge deps={[doorsOpen]}>
+          <Merge deps={[doorsOpen, cutaway, kind]}>
             {kind === 'container' ? (
-              <ContainerChassis color={spec.containerColor ?? '#17a99a'} spin={spin} />
+              <ContainerChassis color={spec.containerColor ?? '#17a99a'} cutaway={cutaway} spin={spin} />
             ) : (
-              <Trailer carrier={spec.carrier} doorsOpen={doorsOpen} standalone={kind === 'trailer'} spin={spin} />
+              <Trailer carrier={spec.carrier} doorsOpen={doorsOpen} standalone={kind === 'trailer'} cutaway={cutaway} spin={spin} />
             )}
           </Merge>
+          {cutaway && <CutawayBox v={body} carrier={spec.carrier} />}
         </group>
       )}
     </group>

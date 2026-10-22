@@ -141,15 +141,15 @@ const CABLE_TONES = ['#1d2b5a', '#d64b4b', '#2f5ff0', '#2b3140'];
 /**
  * Layout for every cargo item: where it stands (floor spot or on top of
  * another unit), then the primitives that draw it. Pure function of the
- * World State.
+ * World State. `baseOf` overrides where a unit's base sits (units packed in a truck).
  */
-export function buildCargoPrims(cargo: Cargo[], labelled: Set<string> = new Set()) {
+export function buildCargoPrims(cargo: Cargo[], labelled: Set<string> = new Set(), baseOf?: (c: Cargo) => number | undefined) {
   const prims: Prim[] = [];
   const bounds: CargoBounds[] = [];
   const index = new Map(cargo.map((c, i) => [c.id, i]));
   const baseZ = new Map<string, number>();
   const zOf = (c: Cargo, depth = 0): number => {
-    const memo = baseZ.get(c.id);
+    const memo = baseZ.get(c.id) ?? baseOf?.(c);
     if (memo !== undefined) return memo;
     const below = c.on ? cargo[index.get(c.on) ?? -1] : undefined;
     const z = below && depth < 8 ? zOf(below, depth + 1) + below.dims.h + 0.02 : heightAt(devYard, c.x, c.y);

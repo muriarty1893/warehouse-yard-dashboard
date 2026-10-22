@@ -11,6 +11,8 @@ import { CargoLayer } from './cargo/CargoLayer';
 import { Overlays } from './cargo/Overlays';
 import { Placement } from './cargo/Placement';
 import { Lighting } from './Lighting';
+import { LoadView, usePlannerVehicle } from './loading/LoadView';
+import { useView } from '../state/view';
 import { RouteLines } from './RouteLines';
 import { GateArea } from './site/Gate';
 import { CameraRig, MAX_DISTANCE, MIN_DISTANCE, YARD_CENTER } from './CameraRig';
@@ -30,6 +32,8 @@ export function YardScene() {
   const yard = devYard;
   const nature = useLayers((s) => s.nature);
   const traffic = useLayers((s) => s.traffic);
+  const planned = useView((s) => s.planner?.truckId ?? null);
+  const plannerVehicle = usePlannerVehicle(planned);
 
   return (
     <>
@@ -57,9 +61,8 @@ export function YardScene() {
       <Overlays />
       <Placement />
       <RouteLines />
-      {trucks.map((t) => (
-        <Truck key={t.id} spec={t} />
-      ))}
+      {trucks.map((t) => (t.id === planned ? <Truck key={t.id} spec={t} plannerVehicle={plannerVehicle} cutaway /> : <Truck key={t.id} spec={t} />))}
+      <LoadView />
       {forklifts.map((f) => (
         <Forklift key={f.id} spec={f} />
       ))}

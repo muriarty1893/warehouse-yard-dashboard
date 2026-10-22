@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bayById } from '../config/devYard';
 import { bayRear, parkInBay } from '../domain/vehicles';
-import { bayFitWarning, bayOfTruck, boxToLocal, boxToYard, truckPoseFor } from './frame';
+import { bayFitWarning, bayOfTruck, boxToLocal, boxToYard, rigidLayout, truckPoseFor } from './frame';
 import { vehicleById } from './vehicles';
 
 const L1 = bayById('L1');
@@ -45,5 +45,27 @@ describe('box frame', () => {
     expect(bayOfTruck('TRUCK-102')?.id).toBe('L1');
     expect(bayOfTruck('TRUCK-110')?.id).toBe('P2');
     expect(bayOfTruck('TRUCK-104')).toBeNull();
+  });
+
+  it("rigid model for rigid-26 keeps today's proportions", () => {
+    const r = rigidLayout(vehicleById('rigid-26'));
+    expect(r.boxCenter).toBeCloseTo(0.45, 2);
+    expect(r.boxLength).toBeCloseTo(7.7, 2);
+    expect(r.boxHeight).toBeCloseTo(2.85, 2);
+    expect(r.boxY).toBeCloseTo(2.48, 2);
+    expect(r.frontAxle).toBeCloseTo(5.3, 2);
+    expect(r.rearAxles).toEqual([0, -1.3]);
+    expect(r.cabFront).toBeCloseTo(7.05, 2);
+    expect(r.rearX).toBeCloseTo(-3.4, 2);
+    expect(r.frame).toEqual({ x: expect.closeTo(1.9, 2), l: expect.closeTo(8.6, 2) });
+  });
+
+  it('shorter rigids keep their doors and axles where the statics put them', () => {
+    const v = vehicleById('rigid-18');
+    const r = rigidLayout(v);
+    expect(r.rearX).toBeCloseTo(-v.model.doorsToOrigin, 6);
+    // The rear axle stands at box x 4.6 (statics) — model x 0.
+    expect(boxToLocal(v, 4.6)).toBeCloseTo(r.rearAxles[0], 6);
+    expect(boxToLocal(v, -1.2)).toBeCloseTo(r.frontAxle, 6);
   });
 });

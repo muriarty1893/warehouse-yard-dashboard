@@ -45,3 +45,24 @@ export function bayOfTruck(truckId: string): TruckBay | null {
     return Math.hypot(p.x - x, p.y - y) < 1.5;
   }) ?? null;
 }
+
+/** Proportions of a rigid truck model (model-local x forward, origin on the first rear axle). */
+export function rigidLayout(v: VehicleSpec) {
+  const front = v.model.frontWall + 0.1;
+  const rearX = -v.model.doorsToOrigin;
+  const boxHeight = v.inner.h + 0.2;
+  const start = Math.min(...v.model.rearAxles) - 1.1;
+  const end = v.model.frontAxle + 0.9;
+  return {
+    boxCenter: (front + rearX) / 2,
+    boxLength: front - rearX,
+    boxHeight,
+    /** Height of the box centre (the floor sits just under the deck). */
+    boxY: v.deck - 0.045 + boxHeight / 2,
+    rearX,
+    frontAxle: v.model.frontAxle,
+    rearAxles: v.model.rearAxles,
+    cabFront: v.model.frontWall + 2.85,
+    frame: { x: (start + end) / 2, l: end - start },
+  };
+}

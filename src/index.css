@@ -53,3 +53,15 @@ body,
 .tag-light span {
   color: #5b6b8c;
 }
+.tag-amber {
+  background: #fff1df;
+  color: #c4640a;
+}
+.tag-red {
+  background: #e05252;
+  color: #fff;
+}
+.tag-violet {
+  background: #7a5af0;
+  color: #fff;
+}

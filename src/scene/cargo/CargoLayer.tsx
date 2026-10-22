@@ -11,7 +11,7 @@ import { buildCargoPrims, makePrimAssets, type CargoBounds, type Prim, type Prim
 import { Containers } from './Containers';
 import { selectAndFocus } from '../../ui/focus';
 
-function PrimMesh({ prims, asset, onHover, onClick, onDoubleClick }: {
+export function PrimMesh({ prims, asset, onHover, onClick, onDoubleClick }: {
   prims: Prim[];
   asset: { geometry: THREE.BufferGeometry; material: THREE.Material };
   onHover: (cargo: number | null) => void;
