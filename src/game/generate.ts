@@ -1,13 +1,12 @@
 import { road } from '../config/devYard';
-import { forklifts as fleetForklifts } from '../config/fleet';
 import { DESTINATIONS, hashString, isStackable, makeUnit, mulberry32, type UnitLook } from '../domain/seed';
-import type { Pose } from '../domain/types';
 import { pack } from '../loading/pack';
 import type { PackItem } from '../loading/types';
 import { vehicleById } from '../loading/vehicles';
 import { buildGrid, reachUnit } from '../sim/grid';
 import { demoCargo } from '../world/demo';
 import { DEFAULT_PRICES } from './ledger';
+import { FORKLIFT_HOMES } from './places';
 import { secondsFor, SHIFT_LENGTH_MIN, type GameCargo, type GameForklift, type GameTruck, type Recipe, type ShiftState } from './types';
 
 /**
@@ -15,13 +14,6 @@ import { secondsFor, SHIFT_LENGTH_MIN, type GameCargo, type GameForklift, type G
  * trucks with their units, missing papers and the crew, all from the
  * recipe's seed, so a retry is the same shift.
  */
-
-/** Where each forklift starts the shift. */
-export const FORKLIFT_HOMES: Record<string, Pose> = {
-  'FL-01': { x: 33.0, y: 31.4, heading: 0 },
-  'FL-02': { x: 17.0, y: 19.2, heading: Math.PI / 2 },
-  ...Object.fromEntries(fleetForklifts.filter((f) => f.pose).map((f) => [f.id, f.pose!])),
-};
 
 const INBOUND_LOOKS: UnitLook[] = ['cartons', 'wrap-blue', 'wrap-white', 'bag', 'cartons', 'crate'];
 

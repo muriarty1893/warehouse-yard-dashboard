@@ -27,3 +27,69 @@ export const TEST_RECIPE: Recipe = {
 };
 
 export const withRecipe = (patch: Partial<Recipe>): Recipe => ({ ...TEST_RECIPE, ...patch });
+
+// ---------------------------------------------------------------------------
+// Docked trucks for route and crew tests
+
+import { bayById } from '../config/devYard';
+import type { Cargo } from '../domain/types';
+import { pack } from '../loading/pack';
+import { vehicleById } from '../loading/vehicles';
+import type { Placement } from '../loading/types';
+import { buildGrid, reachUnit, type Grid } from '../sim/grid';
+import { newShift } from './generate';
+import { parkedPose } from './places';
+import type { GameTruck, ShiftState } from './types';
+
+export const truck = (s: ShiftState, id: string): GameTruck => s.trucks.find((t) => t.id === id)!;
+export const yardOf = (s: ShiftState): Cargo[] => s.cargo.filter((c) => !c.loadedOn && !c.gone);
+
+/** Put a truck straight into a bay, as if it had docked. */
+export function dock(s: ShiftState, id: string, bayId: string, t = 0): GameTruck {
+  const tr = truck(s, id);
+  const bay = bayById(bayId);
+  Object.assign(tr, { stage: 'docked', bayId, pose: parkedPose(bay), slot: null, times: { arrived: t, leftKerb: t, docked: t } });
+  return tr;
+}
+
+export const truckAt = (tr: GameTruck) => ({ pose: tr.pose, vehicle: vehicleById(tr.vehicle), bay: bayById(tr.bayId!) });
+
+/** TRUCK-OUT-1 docked at L1 with one of its yard units and that unit's placement in the truck. */
+export function loadFixture() {
+  const s = newShift(TEST_RECIPE);
+  const tr = dock(s, 'TRUCK-OUT-1', 'L1');
+  const unit = yardOf(s).find((c) => c.destination === 'Ankara')!;
+  const placement = packOne(unit, 1);
+  return { s, unit, truck: truckAt(tr), placement };
+}
+
+/** TRUCK-IN-1 docked at L2: the unit nearest its doors and that unit's placement. */
+export function unloadFixture() {
+  const s = newShift(TEST_RECIPE);
+  const tr = dock(s, 'TRUCK-IN-1', 'L2');
+  const placement = [...tr.load].sort((a, b) => b.seq - a.seq)[0];
+  const unit = s.cargo.find((c) => c.id === placement.cargoId)!;
+  return { s, unit, truck: truckAt(tr), placement };
+}
+
+/** loadRoute arguments for a yard unit walled in on all four approach sides. */
+export function boxedInFixture() {
+  const { s, unit, truck: at, placement } = loadFixture();
+  const blockers: Cargo[] = [];
+  for (const axis of [0, Math.PI / 2]) {
+    const half = (axis === 0 ? unit.dims.l : unit.dims.w) / 2;
+    for (const side of [1, -1]) {
+      const d = side * (half + 1.45);
+      const yaw = unit.yaw + axis;
+      blockers.push({ ...unit, id: `BLOCK-${blockers.length}`, x: unit.x + Math.cos(yaw) * d, y: unit.y + Math.sin(yaw) * d, dims: { l: 1, w: 1, h: 1 }, on: null });
+    }
+  }
+  const cargo = [...yardOf(s), ...blockers];
+  return { from: { x: 40, y: 20, heading: 0 }, grid: buildGrid(cargo), cargo, unit, truck: at, placement, t0: 0, truckFreeAt: -Infinity };
+}
+
+export function packOne(unit: Cargo, stop: number): Placement {
+  return pack(vehicleById('rigid-26'), [{ id: unit.id, stop, l: unit.dims.l, w: unit.dims.w, h: unit.dims.h, weightKg: unit.weightKg, stackable: true, fragile: false, urgent: false }]).placements[0];
+}
+
+export const reachable = (grid: Grid, cargo: Cargo[], c: Cargo) => !!reachUnit(grid, cargo, c);
