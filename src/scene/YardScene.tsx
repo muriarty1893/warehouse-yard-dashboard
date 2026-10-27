@@ -3,7 +3,7 @@ import { EffectComposer, N8AO, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import { Suspense } from 'react';
 import { devYard } from '../config/devYard';
-import { forklifts, trucks, workers } from '../config/fleet';
+import { workers } from '../config/fleet';
 import { settings } from '../settings';
 import { SimClock } from '../sim/clock';
 import { useLayers } from '../state/layers';
@@ -11,8 +11,8 @@ import { CargoLayer } from './cargo/CargoLayer';
 import { Overlays } from './cargo/Overlays';
 import { Placement } from './cargo/Placement';
 import { Lighting } from './Lighting';
-import { LoadView, usePlannerVehicle } from './loading/LoadView';
-import { useView } from '../state/view';
+import { GameForklifts, GameTrucks } from './game/GameVehicles';
+import { LoadView } from './loading/LoadView';
 import { RouteLines } from './RouteLines';
 import { GateArea } from './site/Gate';
 import { CameraRig, MAX_DISTANCE, MIN_DISTANCE, YARD_CENTER } from './CameraRig';
@@ -23,17 +23,13 @@ import { Nature, RoadTiles } from './site/EnvAssets';
 import { Ground } from './site/Ground';
 import { Props } from './site/Props';
 import { Scenery } from './site/Scenery';
-import { Forklift } from './vehicles/Forklift';
 import { Traffic } from './vehicles/Traffic';
-import { Truck } from './vehicles/Truck';
 import { Worker } from './vehicles/Worker';
 
 export function YardScene() {
   const yard = devYard;
   const nature = useLayers((s) => s.nature);
   const traffic = useLayers((s) => s.traffic);
-  const planned = useView((s) => s.planner?.truckId ?? null);
-  const plannerVehicle = usePlannerVehicle(planned);
 
   return (
     <>
@@ -61,11 +57,9 @@ export function YardScene() {
       <Overlays />
       <Placement />
       <RouteLines />
-      {trucks.map((t) => (t.id === planned ? <Truck key={t.id} spec={t} plannerVehicle={plannerVehicle} cutaway /> : <Truck key={t.id} spec={t} />))}
+      <GameTrucks />
       <LoadView />
-      {forklifts.map((f) => (
-        <Forklift key={f.id} spec={f} />
-      ))}
+      <GameForklifts />
       {workers.map((w) => (
         <Worker key={w.id} spec={w} />
       ))}

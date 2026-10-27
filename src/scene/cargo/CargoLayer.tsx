@@ -3,9 +3,11 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useUi } from '../../state/ui';
 import { placeAt } from '../../ui/actions';
-import { labelledCargo, useInventory } from '../../world/inventory';
-import { inYard } from '../../world/placement';
-import { useJobs } from '../../sim/jobs';
+import type { Cargo } from '../../domain/types';
+import { yardUnitsAt } from '../../game/motion';
+import { useGame } from '../../game/store';
+import type { GameCargo } from '../../game/types';
+import { clock } from '../../sim/clock';
 import { Brackets, Pin, Tag } from '../markers';
 import { unitBox, yardToWorld } from '../kit';
 import { buildCargoPrims, makePrimAssets, type CargoBounds, type Prim, type PrimKind } from './cargoPrims';
@@ -101,12 +103,25 @@ export function stackTopOf(cargo: { id: string; on: string | null }[], id: strin
   return top;
 }
 
+/** The shift's yard units at the clock time, the same array while nothing in the yard changes. */
+function useYardUnits(): Cargo[] {
+  const shift = useGame((s) => s.shift);
+  const version = useGame((s) => s.version);
+  const last = useRef<{ key: string; units: Cargo[] }>({ key: '', units: [] });
+  return useMemo(() => {
+    const units = shift ? yardUnitsAt(shift, clock.t) : [];
+    const key = units.map((c) => `${c.id}:${c.x}:${c.y}:${c.yaw}:${c.on ?? ''}`).join('|');
+    if (key !== last.current.key) last.current = { key, units };
+    return last.current.units;
+    // version: the shift is mutated in place; re-read it on every engine tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shift, version]);
+}
+
 export function CargoLayer() {
-  const all = useInventory((s) => s.cargo);
-  const picked = useJobs((s) => s.hidden);
-  const cargo = useMemo(() => all.filter((c) => inYard(c) && !picked.has(c.id)), [all, picked]);
-  const documents = useInventory((s) => s.documents);
-  const labelled = useMemo(() => labelledCargo(documents), [documents]);
+  const cargo = useYardUnits();
+  // Units with complete papers carry their label.
+  const labelled = useMemo(() => new Set((cargo as GameCargo[]).filter((c) => c.papers !== 'missing').map((c) => c.id)), [cargo]);
   const assets = useMemo(makePrimAssets, []);
   const { prims, bounds } = useMemo(() => buildCargoPrims(cargo, labelled), [cargo, labelled]);
   const byKind = useMemo(() => {

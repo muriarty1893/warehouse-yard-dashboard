@@ -8,6 +8,8 @@ import { frameStep } from './sim/clock';
 import { useUi } from './state/ui';
 import { useView } from './state/view';
 import { Dashboard } from './ui/Dashboard';
+import { useGame } from './game/store';
+import { GameClock } from './scene/game/GameClock';
 
 /**
  * While the planner's 2D plan covers the view the scene renders on demand,
@@ -27,6 +29,14 @@ function PlanTicker() {
 }
 
 export default function App() {
+  // Temporary until the campaign screens exist (plan Task 17): start shift 1 straight away.
+  useEffect(() => {
+    const g = useGame.getState();
+    if (!g.shift) {
+      g.openBriefing('opening-gate');
+      useGame.getState().startShift();
+    }
+  }, []);
   const select = useUi((s) => s.select);
   const drawing = useView((s) => !!s.planner && s.plannerView === 'plan');
   return (
@@ -43,6 +53,7 @@ export default function App() {
         <YardScene />
         {drawing && <PlanTicker />}
       </Canvas>
+      <GameClock />
       {settings.ui && <Dashboard />}
     </div>
   );

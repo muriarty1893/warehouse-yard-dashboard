@@ -7,7 +7,7 @@ import { create } from 'zustand';
  */
 export const clock = { t: 40, speed: 1 };
 
-export const SPEEDS = [1, 2, 4, 8] as const;
+export const SPEEDS = [1, 2, 4] as const;
 
 interface SimControls {
   speed: number;

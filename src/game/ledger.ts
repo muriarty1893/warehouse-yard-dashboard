@@ -47,6 +47,8 @@ export function post(s: ShiftState, e: Omit<LedgerEntry, 'rule'>): GameEvent {
 /** Fees still running at t: gate waiting past the free minutes, outbound trucks past their deadline. */
 export function runningFees(s: ShiftState, t: number): { ref: string; kind: 'gateWait' | 'late'; minutes: number; amount: number }[] {
   const out: { ref: string; kind: 'gateWait' | 'late'; minutes: number; amount: number }[] = [];
+  // At the end of the shift every running fee is posted.
+  if (s.over) return out;
   for (const tr of s.trucks) {
     if (tr.stage === 'waiting' && tr.times.arrived !== undefined) {
       const minutes = shiftMinutes(t - tr.times.arrived);

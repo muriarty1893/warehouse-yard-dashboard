@@ -3,12 +3,14 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { devYard } from '../../config/devYard';
 import { polygonBounds } from '../../domain/geometry';
-import type { Cargo, SourceDocument } from '../../domain/types';
 import { heightAt } from '../../domain/yard';
 import { useLayers, type Overlay } from '../../state/layers';
-import { useInventory } from '../../world/inventory';
-import { useWorld } from '../../world/store';
-import { inYard, stackOf } from '../../world/placement';
+import { yardUnitsAt } from '../../game/motion';
+import { areaInfo } from '../../game/select';
+import { useGame } from '../../game/store';
+import type { GameCargo } from '../../game/types';
+import { clock } from '../../sim/clock';
+import { stackOf } from '../../world/placement';
 import { unitBox, yardToWorld } from '../kit';
 
 /**
@@ -34,24 +36,19 @@ export function destinationColor(city: string) {
   return DEST_PALETTE[i % DEST_PALETTE.length];
 }
 
-/** 0 = confirmed document, 1 = drafts only, 2 = no document. */
-export function paperworkState(documents: SourceDocument[], cargoId: string) {
-  const docs = documents.filter((d) => d.cargoId === cargoId);
-  return !docs.length ? 2 : docs.some((d) => d.status === 'confirmed') ? 0 : 1;
-}
-
-function haloColor(overlay: Overlay, stack: Cargo[], documents: SourceDocument[]) {
-  if (overlay === 'documents') return [OVERLAY_TONES.green, OVERLAY_TONES.amber, OVERLAY_TONES.red][Math.max(...stack.map((c) => paperworkState(documents, c.id)))];
+function haloColor(overlay: Overlay, stack: GameCargo[]) {
+  if (overlay === 'documents') return stack.some((c) => c.papers === 'missing') ? OVERLAY_TONES.red : OVERLAY_TONES.green;
   return destinationColor(stack[stack.length - 1].destination);
 }
 
 const floorH = (x: number, y: number) => heightAt(devYard, x, y);
 
 function Halos({ overlay }: { overlay: Overlay }) {
-  const cargo = useInventory((s) => s.cargo);
-  const documents = useInventory((s) => s.documents);
+  const shift = useGame((s) => s.shift);
+  const version = useGame((s) => s.version);
+  const cargo = useMemo(() => (shift ? yardUnitsAt(shift, clock.t) : []), [shift, version]);
   const ref = useRef<THREE.InstancedMesh>(null);
-  const floor = useMemo(() => cargo.filter((c) => !c.on && inYard(c)), [cargo]);
+  const floor = useMemo(() => cargo.filter((c) => !c.on), [cargo]);
   const material = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false }), []);
   useLayoutEffect(() => {
     const mesh = ref.current;
@@ -64,18 +61,20 @@ function Halos({ overlay }: { overlay: Overlay }) {
       q.setFromAxisAngle(up, c.yaw);
       m.compose(new THREE.Vector3(...yardToWorld(c.x, c.y, floorH(c.x, c.y) + 0.025)), q, new THREE.Vector3(c.dims.l + 0.34, 0.01, c.dims.w + 0.34));
       mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, color.set(haloColor(overlay, stackOf(cargo, c.id), documents)));
+      mesh.setColorAt(i, color.set(haloColor(overlay, stackOf(cargo, c.id) as GameCargo[])));
     });
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
-  }, [floor, cargo, documents, overlay]);
+  }, [floor, cargo, overlay]);
   if (!floor.length) return null;
   return <instancedMesh key={floor.length} ref={ref} args={[unitBox, material, floor.length]} renderOrder={1} />;
 }
 
 function AreaTints() {
-  const areas = useWorld((s) => s.areas);
+  const shift = useGame((s) => s.shift);
+  const version = useGame((s) => s.version);
+  const areas = useMemo(() => (shift ? areaInfo(shift) : []), [shift, version]);
   const shapes = useMemo(
     () =>
       devYard.storage.map((a) => {
@@ -89,8 +88,8 @@ function AreaTints() {
     <group>
       {shapes.map(({ a, geometry, label }) => {
         const st = areas.find((x) => x.id === a.id);
-        const pct = st ? Math.round((Math.min(st.used, st.capacity) / st.capacity) * 100) : 0;
-        const tone = pct > 85 ? OVERLAY_TONES.red : pct > 65 ? OVERLAY_TONES.amber : OVERLAY_TONES.green;
+        const density = st?.density ?? 0;
+        const tone = density > 2.5 ? OVERLAY_TONES.red : density > 1.8 ? OVERLAY_TONES.amber : OVERLAY_TONES.green;
         return (
           <group key={a.id}>
             {/* Shape is in the yard x/y plane: lay it flat (y → −z). */}
@@ -100,9 +99,7 @@ function AreaTints() {
             <Html position={yardToWorld(label[0], label[1], (a.elevation ?? 0) + 2.6)} center zIndexRange={[20, 5]} style={{ pointerEvents: 'none' }}>
               <div className="tag tag-light">
                 <b>{a.name}</b>
-                <span>
-                  {pct}% full · {st?.units ?? 0} units
-                </span>
+                <span>{st?.units ?? 0} units</span>
               </div>
             </Html>
           </group>

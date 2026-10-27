@@ -1,8 +1,6 @@
 import { useMemo } from 'react';
 import { FORKLIFT } from '../../domain/vehicles';
-import { planOf, useLoading } from '../../loading/store';
-import { useJobs } from '../../sim/jobs';
-import { useInventory } from '../../world/inventory';
+import { useGame } from '../../game/store';
 import { buildCargoPrims, makePrimAssets, type Prim, type PrimKind } from '../cargo/cargoPrims';
 import { PrimMesh } from '../cargo/CargoLayer';
 
@@ -13,9 +11,9 @@ const noop = () => {};
  * carriage's frame: lengthwise when it travels lengthwise in the truck.
  */
 export function CarriedUnit({ cargoId }: { cargoId: string }) {
-  const unit = useInventory((s) => s.cargo.find((c) => c.id === cargoId));
-  const truckId = useJobs((s) => s.run?.truckId ?? null);
-  const turned = useLoading((s) => (truckId ? planOf(s, truckId)?.placements.find((p) => p.cargoId === cargoId)?.yaw === 90 : false));
+  const unit = useGame((s) => s.shift?.cargo.find((c) => c.id === cargoId));
+  // Lengthwise when it travels lengthwise in the truck.
+  const turned = useGame((s) => s.shift?.jobs.find((j) => j.unitId === cargoId && j.status === 'active')?.placement?.yaw === 90);
   const assets = useMemo(makePrimAssets, []);
   const byKind = useMemo(() => {
     if (!unit) return [];

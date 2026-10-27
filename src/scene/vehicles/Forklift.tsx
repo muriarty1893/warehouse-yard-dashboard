@@ -8,7 +8,7 @@ import { entityTime, isHeld } from '../../sim/control';
 import { carriedAt, floorAt, jobPose } from '../../sim/jobs';
 import { CarriedUnit } from '../loading/CarriedUnit';
 import { useLayers } from '../../state/layers';
-import { compileRoute, evalRoute, newPose } from '../../sim/route';
+import { compileRoute, evalRoute, newPose, type RoutePose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
 import { Box, Cyl, mat, palette, RBox, unitSphere, Wheel, yardToWorld } from '../kit';
 import { Brackets, Tag } from '../markers';
@@ -98,7 +98,8 @@ function ForkliftModel({ carriage, beacon, loadRef, load, carried, spin }: {
   );
 }
 
-export function Forklift({ spec }: { spec: ForkliftSpec }) {
+/** `drive` (game) sets the pose each frame and `carry` names the unit on the forks; else the scripted route / loading run does. */
+export function Forklift({ spec, drive, carry }: { spec: ForkliftSpec; drive?: (out: RoutePose) => void; carry?: () => string | null }) {
   const root = useRef<THREE.Group>(null);
   const carriage = useRef<THREE.Group>(null);
   const beacon = useRef<THREE.MeshStandardMaterial>(null);
@@ -124,7 +125,7 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
   useFrame(() => {
     if (!root.current || !carriage.current || !loadRef.current) return;
     // A loading run's job takes over from the usual route while it lasts.
-    const job = jobPose(spec.id, clock.t, pose);
+    const job = drive ? (drive(pose), true) : jobPose(spec.id, clock.t, pose);
     const moving = !!job || !!route;
     if (!job && route) evalRoute(route, entityTime(spec.id, clock.t), pose);
     if (moving) {
@@ -144,7 +145,7 @@ export function Forklift({ spec }: { spec: ForkliftSpec }) {
       root.current.position.set(...yardToWorld(spec.pose.x, spec.pose.y, groundAt(spec.pose.x, spec.pose.y)));
       root.current.rotation.set(0, spec.pose.heading, 0);
     }
-    const unit = job ? carriedAt(spec.id, clock.t) : null;
+    const unit = carry ? carry() : job ? carriedAt(spec.id, clock.t) : null;
     if (unit !== carriedRef.current) {
       carriedRef.current = unit;
       setCarried(unit);

@@ -112,4 +112,10 @@ describe('ledger', () => {
     expect(fmtMoney(-180)).toBe('−€180');
     expect(fmtMoney(4280, { sign: false })).toBe('€4,280');
   });
+
+  test('no fees run once the shift is over (they were posted)', () => {
+    const s = stateWithWaitingTruck({ waitSince: 0 });
+    s.over = true;
+    expect(runningFees(s, secondsFor(60))).toEqual([]);
+  });
 });

@@ -1,7 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { SPEEDS, useSim } from '../sim/clock';
 import { useUi } from '../state/ui';
 import { useView } from '../state/view';
 import { devYard } from '../config/devYard';
@@ -139,7 +138,6 @@ export function CameraRig() {
       const k = e.key.toLowerCase();
       keys.current.add(k);
       const view = useView.getState();
-      const sim = useSim.getState();
       const sel = ui.selected;
       switch (k) {
         case 't':
@@ -188,16 +186,6 @@ export function CameraRig() {
           view.setFollow(null);
           view.toggleHelp(false);
           view.toggleLayers(false);
-          break;
-        case ' ':
-          e.preventDefault();
-          sim.togglePause();
-          break;
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-          sim.setSpeed(SPEEDS[Number(k) - 1]);
           break;
         case '?':
           view.toggleHelp();

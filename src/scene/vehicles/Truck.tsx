@@ -10,7 +10,7 @@ import { VEHICLES } from '../../loading/vehicles';
 import { clock } from '../../sim/clock';
 import { entityTime, isHeld } from '../../sim/control';
 import { useLayers } from '../../state/layers';
-import { compileRoute, evalRoute, newPose } from '../../sim/route';
+import { compileRoute, evalRoute, newPose, type RoutePose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
 import { containerMaterials } from '../cargo/Containers';
 import { Box, Cyl, glassMat, glowMat, mat, palette, RBox, unitBox, Wheel, yardToWorld } from '../kit';
@@ -260,7 +260,7 @@ const modelKind = (v: VehicleSpec): TruckKind => (v.model.kind === 'rigid' ? 'ri
  * A truck in the yard: static in a bay, or following a scripted route. In the
  * load planner the planned truck shows the chosen vehicle, opened up.
  */
-export function Truck({ spec, interactive = true, plannerVehicle, cutaway = false }: { spec: TruckSpec; interactive?: boolean; plannerVehicle?: VehicleSpec; cutaway?: boolean }) {
+export function Truck({ spec, interactive = true, plannerVehicle, cutaway = false, drive }: { spec: TruckSpec; interactive?: boolean; plannerVehicle?: VehicleSpec; cutaway?: boolean; drive?: (out: RoutePose) => void }) {
   const root = useRef<THREE.Group>(null);
   const front = useRef<THREE.Group>(null);
   const rear = useRef<THREE.Group>(null);
@@ -274,7 +274,7 @@ export function Truck({ spec, interactive = true, plannerVehicle, cutaway = fals
   const [onMap, setOnMap] = useState(true);
   const onMapState = useRef(true);
 
-  const spin: Spin | undefined = route
+  const spin: Spin | undefined = route || drive
     ? (g) => {
         if (g && !wheels.current.includes(g)) wheels.current.push(g);
       }
@@ -294,8 +294,9 @@ export function Truck({ spec, interactive = true, plannerVehicle, cutaway = fals
   }, [ref, interactive]);
 
   useFrame(() => {
-    if (!route || !root.current || !front.current) return;
-    evalRoute(route, entityTime(spec.id, clock.t), pose);
+    if ((!route && !drive) || !root.current || !front.current) return;
+    if (drive) drive(pose);
+    else evalRoute(route!, entityTime(spec.id, clock.t), pose);
     root.current.visible = pose.visible;
     if (pose.visible !== onMapState.current) {
       onMapState.current = pose.visible;
