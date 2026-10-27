@@ -132,7 +132,8 @@ function times(legs: Leg[], t0: number) {
 /** Wait at the queue point until the truck is free, so the approach ends no earlier than truckFreeAt + MARGIN. */
 function waitForDock(legs: Leg[], approach: Leg, t0: number, truckFreeAt: number, carry: boolean) {
   const arrive = t0 + duration([...legs, approach]);
-  if (arrive < truckFreeAt + MARGIN) legs.push({ kind: 'wait', phase: 'carrying', seconds: truckFreeAt + MARGIN - arrive, fork: [carry ? TRAVEL_FORK : 0.12, carry ? TRAVEL_FORK : 0.12], carry, status: 'Waiting for the dock' });
+  // A hair over the gap: the wait is measured on a separately compiled route, which can drift by 1e-14.
+  if (arrive < truckFreeAt + MARGIN) legs.push({ kind: 'wait', phase: 'carrying', seconds: truckFreeAt + MARGIN - arrive + 1e-6, fork: [carry ? TRAVEL_FORK : 0.12, carry ? TRAVEL_FORK : 0.12], carry, status: 'Waiting for the dock' });
 }
 
 /** Yard unit → truck, at its planned placement. */

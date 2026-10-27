@@ -93,3 +93,54 @@ export function packOne(unit: Cargo, stop: number): Placement {
 }
 
 export const reachable = (grid: Grid, cargo: Cargo[], c: Cargo) => !!reachUnit(grid, cargo, c);
+
+// ---------------------------------------------------------------------------
+// Crew helpers
+
+import type { Due, GameCargo, JobKind } from './types';
+
+export function dockedInboundFixture(bayId = 'L1') {
+  const s = newShift(TEST_RECIPE);
+  dock(s, 'TRUCK-IN-1', bayId);
+  return s;
+}
+
+export function dockedOutboundFixture(bayId = 'L1') {
+  const s = newShift(TEST_RECIPE);
+  dock(s, 'TRUCK-OUT-1', bayId);
+  return s;
+}
+
+export type GroupDef = { kind: JobKind; label: string; truckId: string | null; areaId: string | null; units: { unitId: string; placement: Placement | null }[] };
+
+/** Load jobs for the first n of TRUCK-OUT-1's yard units, packed together. */
+export function loadGroupFor(s: ShiftState, n: number): GroupDef {
+  const units = yardOf(s).filter((c) => ['Ankara', 'Konya'].includes(c.destination)).slice(0, n);
+  const placements = pack(
+    vehicleById('rigid-26'),
+    units.map((u) => ({ id: u.id, stop: 1, l: u.dims.l, w: u.dims.w, h: u.dims.h, weightKg: u.weightKg, stackable: true, fragile: false, urgent: false })),
+  ).placements.sort((a, b) => a.seq - b.seq);
+  return { kind: 'load', label: 'Load TRUCK-OUT-1', truckId: 'TRUCK-OUT-1', areaId: null, units: placements.map((p) => ({ unitId: p.cargoId, placement: p })) };
+}
+
+/** Unload jobs for all of TRUCK-IN-1's units, doors first. */
+export function unloadGroupFor(s: ShiftState, areaId: string): GroupDef {
+  const load = [...truck(s, 'TRUCK-IN-1').load].sort((a, b) => b.seq - a.seq);
+  return { kind: 'unload', label: `Unload TRUCK-IN-1 → ${areaId}`, truckId: 'TRUCK-IN-1', areaId, units: load.map((p) => ({ unitId: p.cargoId, placement: p })) };
+}
+
+/** Run due events in (t, order, id) order up to `limit`, re-dispatching after each, as the engine does. */
+export function runAll(dueFn: (s: ShiftState) => Due[], s: ShiftState, limit: number, after: (s: ShiftState, t: number) => void) {
+  for (let guard = 0; guard < 10_000; guard++) {
+    const next = dueFn(s)
+      .filter((d) => d.t <= limit)
+      .sort((a, b) => a.t - b.t || a.order - b.order || a.id.localeCompare(b.id))[0];
+    if (!next) return;
+    next.run();
+    after(s, next.t);
+  }
+  throw new Error('runAll did not settle');
+}
+
+/** A blocker unit for tests: a GameCargo copy of `like` at (x, y). */
+export const blocker = (like: GameCargo, id: string, x: number, y: number): GameCargo => ({ ...like, id, x, y, dims: { l: 1, w: 1, h: 1 }, on: null, loadedOn: null, transitJob: null });

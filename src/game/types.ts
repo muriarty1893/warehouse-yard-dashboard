@@ -152,6 +152,11 @@ export interface Job {
   pickAt: number | null;
   setAt: number | null;
   doneAt: number | null;
+  /** Forklift at the dock face going in / coming out (truck jobs). */
+  enterAt: number | null;
+  leaveAt: number | null;
+  /** Where the forklift stands when the job is done. */
+  end: Pose | null;
   picked: boolean;
   set: boolean;
 }
