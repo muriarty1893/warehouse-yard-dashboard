@@ -3,11 +3,12 @@ import type { Pose } from '../domain/types';
 import { areaAt } from '../domain/yard';
 import { compileRoute, evalRoute, newPose, type RouteSpec } from '../sim/route';
 import { recommendSpot } from '../world/placement';
-import { addGroup, crewDue, dispatch, standing } from './crew';
-import { gateWaitAmount, lateAmount, post } from './ledger';
+import { addGroup, crewDue, dispatch, moveGroup, standing } from './crew';
+import { bayClosedUntil, has, hint, incidentDue } from './incidents';
+import { cash, gateWaitAmount, lateAmount, post } from './ledger';
 import { planningCargo } from './planning';
-import { arriveRoute, departRoute, dockRoute, kerbSlot, parkedPose, queueRoute } from './places';
-import { clockLabel, shiftMinutes, type Action, type ActionResult, type Due, type GameEvent, type GameTruck, type ShiftState } from './types';
+import { arriveRoute, departRoute, dockRoute, kerbSlot, parkedPose, queueRoute, TEMP_IN, tempInRoute } from './places';
+import { clockLabel, secondsFor, shiftMinutes, type Action, type ActionResult, type Due, type GameEvent, type GameTruck, type ShiftState } from './types';
 
 /**
  * The shift engine (spec §1, §3.1). `act` applies a player decision,
@@ -63,6 +64,8 @@ function compactQueue(s: ShiftState, t: number) {
 
 function bayProblem(s: ShiftState, bayId: string, t: number): string | null {
   if (!s.recipe.bays.includes(bayId)) return `Bay ${bayId} is not open today`;
+  const closed = bayClosedUntil(s, bayId, t);
+  if (closed !== null) return `Bay ${bayId} is closed until ${clockLabel(closed)}`;
   for (const o of s.trucks) {
     if (o.bayId !== bayId) continue;
     if (o.stage === 'docking' || o.stage === 'docked') return `Bay ${bayId} is busy`;
@@ -190,9 +193,61 @@ export function validate(s: ShiftState, a: Action, t: number): ActionResult {
       if (tr.dispatchPending) return no(`${tr.id} is already leaving`);
       return ok;
     }
-    default:
-      return no('Not available yet');
+    case 'reorder': {
+      if (a.queue === 'crew') {
+        if (!has(s, 'queue')) return no('The crew queue is fixed in this shift');
+        return s.groups.some((g) => g.id === a.id) ? ok : no('No such job');
+      }
+      if (!has(s, 'papers')) return no('No papers to sort in this shift');
+      const i = s.papers.queue.indexOf(a.id);
+      if (i < 0) return no(`${a.id} has its papers`);
+      if (i === 0 && s.papers.startedAt !== null) return no(`The clerk is already working on ${a.id}`);
+      return ok;
+    }
+    case 'urgent': {
+      if (!has(s, 'queue')) return no('The crew queue is fixed in this shift');
+      const tr = truckOf(s, a.truckId);
+      if (!tr) return no(`No truck ${a.truckId}`);
+      return s.groups.some((g) => g.truckId === tr.id) ? ok : no(`${tr.id} has no jobs yet`);
+    }
+    case 'rushPapers':
+      if (!has(s, 'papers')) return no('No papers to rush in this shift');
+      if (!s.papers.queue.includes(a.unitId)) return no(`${a.unitId} has its papers`);
+      return afford(s, s.prices.rushPapers, t);
+    case 'rentForklift':
+      if (!has(s, 'tempForklift')) return no('No temp forklifts in this shift');
+      if (!Number.isInteger(a.hours) || a.hours < 1 || a.hours > 4) return no('Rent 1 to 4 hours');
+      return afford(s, s.prices.tempForkliftPerHour * a.hours, t);
+    case 'overtime':
+      if (!has(s, 'overtime')) return no('No overtime in this shift');
+      if (s.overtimeBought >= 2) return no('Overtime is used up');
+      return afford(s, s.prices.overtime, t);
+    case 'moveUnits': {
+      const area = devYard.storage.find((x) => x.id === a.areaId);
+      if (!area) return no(`No storage area ${a.areaId}`);
+      if (!a.unitIds.length) return no('No units to move');
+      const listed = new Set(a.unitIds);
+      for (const id of a.unitIds) {
+        const c = s.cargo.find((u) => u.id === id);
+        if (!c || c.gone || c.loadedOn) return no(`${id} is not in the yard`);
+        if (c.transitJob) return no(`${id} is already on the move`);
+        const top = s.cargo.find((u) => u.on === id && !u.gone && !listed.has(u.id));
+        if (top) return no(`${id} has ${top.id} on top`);
+      }
+      return ok;
+    }
   }
+}
+
+function afford(s: ShiftState, price: number, t: number): ActionResult {
+  return cash(s, t) >= price ? ok : no(`Not enough cash (€${price.toLocaleString('en-US')} needed)`);
+}
+
+/** Stack level of a yard unit: 0 on the floor, 1 on one unit, … */
+function level(s: ShiftState, id: string): number {
+  let n = 0;
+  for (let c = s.cargo.find((u) => u.id === id); c?.on && n < 10; c = s.cargo.find((u) => u.id === c!.on)) n++;
+  return n;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,8 +292,49 @@ export function act(s: ShiftState, a: Action, t: number, events: GameEvent[] = [
       else events.push(...depart(s, tr, t));
       break;
     }
-    default:
+    case 'reorder':
+      if (a.queue === 'crew') moveGroup(s, a.id, a.to);
+      else {
+        const q = s.papers.queue.filter((id) => id !== a.id);
+        q.splice(Math.max(a.to, s.papers.startedAt !== null ? 1 : 0), 0, a.id);
+        s.papers.queue = q;
+      }
       break;
+    case 'urgent': {
+      const tr = truckOf(s, a.truckId)!;
+      tr.urgent = true;
+      s.groups = [...s.groups.filter((g) => g.truckId === tr.id), ...s.groups.filter((g) => g.truckId !== tr.id)];
+      break;
+    }
+    case 'rushPapers': {
+      events.push(post(s, { t, kind: 'rushPapers', amount: -s.prices.rushPapers, text: `Papers rushed for ${a.unitId}`, ref: a.unitId }));
+      const wasHead = s.papers.queue[0] === a.unitId;
+      s.papers.queue = s.papers.queue.filter((id) => id !== a.unitId);
+      const c = s.cargo.find((u) => u.id === a.unitId);
+      if (c) c.papers = 'ok';
+      if (wasHead) s.papers.startedAt = s.papers.queue.length ? t : null;
+      break;
+    }
+    case 'rentForklift': {
+      let n = 1;
+      while (s.forklifts.some((f) => f.id === `FL-T${n}`)) n++;
+      const spec = tempInRoute(t);
+      const arrivesAt = routeEnd(spec);
+      s.forklifts.push({ id: `FL-T${n}`, temp: true, pose: { ...TEMP_IN }, motion: { spec, t0: t, until: arrivesAt }, jobId: null, brokenUntil: null, breakdownPendingSec: null, arrivesAt, leaveAt: arrivesAt + secondsFor(60 * a.hours) });
+      events.push(post(s, { t, kind: 'tempForklift', amount: -s.prices.tempForkliftPerHour * a.hours, text: `Temp forklift FL-T${n} for ${a.hours} h`, ref: `FL-T${n}` }));
+      break;
+    }
+    case 'overtime':
+      s.overtimeBought += 1;
+      s.end += secondsFor(30);
+      events.push(post(s, { t, kind: 'overtime', amount: -s.prices.overtime, text: `Overtime · the yard stays open until ${clockLabel(s.end)}`, ref: 'overtime' }));
+      break;
+    case 'moveUnits': {
+      const area = devYard.storage.find((x) => x.id === a.areaId)!;
+      const order = [...a.unitIds].sort((x, y) => level(s, y) - level(s, x));
+      addGroup(s, { kind: 'move', label: `Move ${order.length} unit${order.length === 1 ? '' : 's'} → ${area.name}`, truckId: null, areaId: a.areaId, units: order.map((unitId) => ({ unitId, placement: null })) });
+      break;
+    }
   }
   s.log.push({ t, action: a });
   dispatch(s, t);
@@ -261,7 +357,7 @@ function engineDue(s: ShiftState): Due[] {
 
 export function allDue(s: ShiftState): Due[] {
   if (s.over) return [];
-  return [...engineDue(s), ...crewDue(s)];
+  return [...engineDue(s), ...crewDue(s), ...incidentDue(s)];
 }
 
 const earliest = (dues: Due[]) => dues.reduce<Due | null>((best, d) => (!best || d.t < best.t || (d.t === best.t && (d.order < best.order || (d.order === best.order && d.id < best.id))) ? d : best), null);
@@ -299,7 +395,10 @@ function arrive(s: ShiftState, tr: GameTruck): GameEvent[] {
   tr.slot = freeSlot(s);
   tr.pose = kerbSlot(tr.slot);
   move(tr, arriveRoute(tr.pose, tr.arriveAt), tr.arriveAt);
-  return [];
+  const events: GameEvent[] = [];
+  if (tr.kind === 'outbound') events.push(...hint(s, 'outbound'));
+  if (tr.rush) events.push({ kind: 'notice', t: tr.arriveAt, text: `Rush order: ${tr.id} · due ${tr.deadline === null ? '—' : clockLabel(tr.deadline)} · double pay`, tone: 'warn' }, ...hint(s, 'rushOrder'));
+  return events;
 }
 
 function motionEnd(s: ShiftState, tr: GameTruck): GameEvent[] {
@@ -318,7 +417,8 @@ function motionEnd(s: ShiftState, tr: GameTruck): GameEvent[] {
       tr.stage = 'docked';
       tr.times.docked = t;
       tr.pose = parkedPose(bayById(tr.bayId!));
-      if (tr.kind === 'inbound' && !s.recipe.mechanics.includes('storage')) startUnload(s, tr, suggestArea(s, tr.id));
+      if (tr.kind === 'inbound' && !has(s, 'storage')) startUnload(s, tr, suggestArea(s, tr.id));
+      if (tr.kind === 'inbound') return hint(s, 'storage');
       break;
     case 'departing':
       tr.stage = 'gone';
