@@ -134,9 +134,10 @@ const LOADING: [number, number] = [42.8, 31];
  * Placement recommendation (spec §37 step 13): the free floor spot nearest
  * the loading strip, covered areas first, else on top of a matching stack.
  */
-export function recommendSpot(cargo: Cargo[], item: Placeable): (Spot & { label: string }) | null {
+export function recommendSpot(cargo: Cargo[], item: Placeable, opts: { areaId?: string } = {}): (Spot & { label: string }) | null {
   let best: { x: number; y: number; yaw: number; score: number; area: StorageArea } | null = null;
   for (const area of devYard.storage) {
+    if (opts.areaId && area.id !== opts.areaId) continue;
     for (const part of area.parts) {
       const xs = part.map((p) => p[0]);
       const ys = part.map((p) => p[1]);
@@ -158,6 +159,7 @@ export function recommendSpot(cargo: Cargo[], item: Placeable): (Spot & { label:
   }
   if (best) return { x: best.x, y: best.y, yaw: best.yaw, label: `${best.area.name} · ${gridRef(devYard, best.x, best.y)}` };
   for (const c of cargo) {
+    if (opts.areaId && c.areaId !== opts.areaId) continue;
     if (checkStack(cargo, item, c.id).ok) return { on: c.id, label: `On top of ${c.id}` };
   }
   return null;
