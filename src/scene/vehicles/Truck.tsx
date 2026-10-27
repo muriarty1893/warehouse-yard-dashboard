@@ -8,7 +8,6 @@ import { bayOfTruck, rigidLayout, truckPoseFor } from '../../loading/frame';
 import type { VehicleSpec } from '../../loading/types';
 import { VEHICLES } from '../../loading/vehicles';
 import { clock } from '../../sim/clock';
-import { entityTime, isHeld } from '../../sim/control';
 import { useLayers } from '../../state/layers';
 import { compileRoute, evalRoute, newPose, type RoutePose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
@@ -296,7 +295,7 @@ export function Truck({ spec, interactive = true, plannerVehicle, cutaway = fals
   useFrame(() => {
     if ((!route && !drive) || !root.current || !front.current) return;
     if (drive) drive(pose);
-    else evalRoute(route!, entityTime(spec.id, clock.t), pose);
+    else evalRoute(route!, clock.t, pose);
     root.current.visible = pose.visible;
     if (pose.visible !== onMapState.current) {
       onMapState.current = pose.visible;
@@ -307,7 +306,7 @@ export function Truck({ spec, interactive = true, plannerVehicle, cutaway = fals
     front.current.rotation.y = pose.heading;
     if (rear.current) rear.current.rotation.y = pose.trailerHeading;
     for (const w of wheels.current) w.rotation.z = -pose.odometer / (w.userData.radius as number);
-    const status = isHeld(spec.id) ? `On hold · ${pose.status}` : pose.status;
+    const status = pose.status;
       if (statusRef.current && statusRef.current.textContent !== status) statusRef.current.textContent = status;
     if (pose.doors !== doorsState.current) {
       doorsState.current = pose.doors;

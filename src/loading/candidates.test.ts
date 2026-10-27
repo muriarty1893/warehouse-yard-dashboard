@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { stopEtas } from '../config/cities';
-import { DEFAULT_ROUTES, PLAN_QUEUE } from '../config/routes';
+/** The twin's three plannable trucks and their routes (fixtures). */
+const PLAN_QUEUE = ['TRUCK-102', 'TRUCK-109', 'TRUCK-110'];
+const DEFAULT_ROUTES: Record<string, string[]> = {
+  'TRUCK-102': ['Eskişehir', 'Ankara', 'Kayseri'],
+  'TRUCK-109': ['Konya', 'Adana', 'Mersin', 'Gaziantep'],
+  'TRUCK-110': ['Ankara', 'Kayseri', 'Samsun', 'Trabzon'],
+};
 import type { Cargo } from '../domain/types';
 import { demoCargo } from '../world/demo';
 import { hasOnTop } from '../world/placement';

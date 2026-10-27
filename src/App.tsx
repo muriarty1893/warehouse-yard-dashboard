@@ -7,7 +7,7 @@ import { settings } from './settings';
 import { frameStep } from './sim/clock';
 import { useUi } from './state/ui';
 import { useView } from './state/view';
-import { Dashboard } from './ui/Dashboard';
+import { GameRoot } from './ui/game/GameRoot';
 import { useGame } from './game/store';
 import { GameClock } from './scene/game/GameClock';
 
@@ -54,7 +54,7 @@ export default function App() {
         {drawing && <PlanTicker />}
       </Canvas>
       <GameClock />
-      {settings.ui && <Dashboard />}
+      {settings.ui && <GameRoot />}
     </div>
   );
 }

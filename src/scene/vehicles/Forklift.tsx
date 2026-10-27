@@ -4,8 +4,11 @@ import * as THREE from 'three';
 import { groundAt, type ForkliftSpec } from '../../config/fleet';
 import { FORKLIFT } from '../../domain/vehicles';
 import { clock } from '../../sim/clock';
-import { entityTime, isHeld } from '../../sim/control';
-import { carriedAt, floorAt, jobPose } from '../../sim/jobs';
+import { devYard } from '../../config/devYard';
+import { heightAt } from '../../domain/yard';
+import { useGame } from '../../game/store';
+import { yardToBox } from '../../loading/frame';
+import { vehicleById } from '../../loading/vehicles';
 import { CarriedUnit } from '../loading/CarriedUnit';
 import { useLayers } from '../../state/layers';
 import { compileRoute, evalRoute, newPose, type RoutePose } from '../../sim/route';
@@ -17,6 +20,17 @@ import { selectAndFocus } from '../../ui/focus';
 import { Merge } from '../Merge';
 
 type Load = NonNullable<ForkliftSpec['load']>;
+
+/** Floor height under a game forklift: a docked truck's deck inside its box, else the yard floor (platforms, ramp). */
+function floorAt(x: number, y: number): number {
+  for (const tr of useGame.getState().shift?.trucks ?? []) {
+    if (tr.stage !== 'docked') continue;
+    const v = vehicleById(tr.vehicle);
+    const [bx, by] = yardToBox(tr.pose, v, x, y);
+    if (bx >= -0.1 && bx <= v.inner.l + 0.1 && by >= -0.1 && by <= v.inner.w + 0.1) return v.deck;
+  }
+  return heightAt(devYard, x, y);
+}
 
 /** Pallet + goods carried on the forks (local frame of the carriage). */
 function ForkLoad({ load }: { load: Load }) {
@@ -125,9 +139,9 @@ export function Forklift({ spec, drive, carry }: { spec: ForkliftSpec; drive?: (
   useFrame(() => {
     if (!root.current || !carriage.current || !loadRef.current) return;
     // A loading run's job takes over from the usual route while it lasts.
-    const job = drive ? (drive(pose), true) : jobPose(spec.id, clock.t, pose);
+    const job = drive ? (drive(pose), true) : false;
     const moving = !!job || !!route;
-    if (!job && route) evalRoute(route, entityTime(spec.id, clock.t), pose);
+    if (!job && route) evalRoute(route, clock.t, pose);
     if (moving) {
       const floor = job ? floorAt : groundAt;
       root.current.position.set(...yardToWorld(pose.x, pose.y, floor(pose.x, pose.y)));
@@ -139,20 +153,20 @@ export function Forklift({ spec, drive, carry }: { spec: ForkliftSpec; drive?: (
       const behind = floor(pose.x - c * 0.8, pose.y - sn * 0.8);
       root.current.rotation.z = Math.atan2(ahead - behind, 1.6);
       for (const w of wheels.current) w.rotation.z = -pose.odometer / (w.userData.radius as number);
-      const status = isHeld(spec.id) ? `On hold · ${pose.status}` : pose.status;
+      const status = pose.status;
       if (statusRef.current && statusRef.current.textContent !== status) statusRef.current.textContent = status;
     } else if (spec.pose) {
       root.current.position.set(...yardToWorld(spec.pose.x, spec.pose.y, groundAt(spec.pose.x, spec.pose.y)));
       root.current.rotation.set(0, spec.pose.heading, 0);
     }
-    const unit = carry ? carry() : job ? carriedAt(spec.id, clock.t) : null;
+    const unit = carry ? carry() : null;
     if (unit !== carriedRef.current) {
       carriedRef.current = unit;
       setCarried(unit);
     }
     carriage.current.position.y = moving ? pose.fork : 0.12;
     loadRef.current.visible = moving ? pose.carry && !job : false;
-    if (beacon.current) beacon.current.emissiveIntensity = moving && !isHeld(spec.id) ? 0.4 + 0.8 * Math.max(0, Math.sin(clock.t * 7)) : 0.15;
+    if (beacon.current) beacon.current.emissiveIntensity = moving ? 0.4 + 0.8 * Math.max(0, Math.sin(clock.t * 7)) : 0.15;
   });
 
   const p = spec.pose ?? { x: 0, y: 0, heading: 0 };

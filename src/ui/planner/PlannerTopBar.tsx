@@ -8,8 +8,7 @@ import { vehicleById } from '../../loading/vehicles';
 import { useUi } from '../../state/ui';
 import { useView, type PlannerView } from '../../state/view';
 import { frameTruck } from './camera';
-import { Button, IconButton, Segmented } from '../kit';
-import { Logo } from '../TopBar';
+import { Button, IconButton, Logo, Segmented } from '../kit';
 
 const VIEWS: { value: PlannerView; label: string }[] = [
   { value: '3d', label: '3D' },

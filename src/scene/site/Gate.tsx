@@ -2,10 +2,10 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { devYard } from '../../config/devYard';
-import { trucks } from '../../config/fleet';
 import { clock } from '../../sim/clock';
-import { entityTime } from '../../sim/control';
-import { compileRoute, evalRoute, newPose } from '../../sim/route';
+import { motionOf } from '../../game/motion';
+import { useGame } from '../../game/store';
+import { newPose } from '../../sim/route';
 import { useLayers } from '../../state/layers';
 import { Box, canvasTexture, corrugatedTexture, Cyl, FONT, glowMat, mat, palette, yardToWorld } from '../kit';
 import { Merge } from '../Merge';
@@ -16,7 +16,6 @@ import { Merge } from '../Merge';
  * there and closes once the entrance is clear.
  */
 
-const routes = trucks.filter((t) => t.route).map((t) => ({ id: t.id, route: compileRoute(t.route!) }));
 const pose = newPose();
 const gate = devYard.gates.find((g) => g.parkedPanel)!;
 const X0 = Math.min(gate.a[0], gate.b[0]);
@@ -26,10 +25,10 @@ const [PARK0, PARK1] = gate.parkedPanel!;
 
 /** Does any truck reach the entrance within the next few seconds? */
 function truckNear() {
-  for (const { id, route } of routes) {
-    const te = entityTime(id, clock.t);
+  for (const tr of useGame.getState().shift?.trucks ?? []) {
+    if (!tr.motion) continue;
     for (let ahead = 0; ahead <= 9; ahead += 1.5) {
-      evalRoute(route, te + ahead, pose);
+      motionOf(tr, clock.t + ahead, pose);
       if (pose.visible && pose.x > X0 - 4 && pose.x < X1 + 4 && pose.y > -9 && pose.y < 9) return true;
     }
   }

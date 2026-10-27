@@ -2,7 +2,6 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useUi } from '../../state/ui';
-import { placeAt } from '../../ui/actions';
 import type { Cargo } from '../../domain/types';
 import { yardUnitsAt } from '../../game/motion';
 import { useGame } from '../../game/store';
@@ -144,8 +143,7 @@ export function CargoLayer() {
     if (i !== null) hover({ kind: 'cargo', id: cargo[i].id });
     else if (useUi.getState().hovered?.kind === 'cargo') hover(null);
   };
-  // In placement mode, clicking a unit means "put it on top of this stack".
-  const onClick = (i: number) => (useUi.getState().placing ? placeAt({ on: stackTopOf(cargo, cargo[i].id) }) : select({ kind: 'cargo', id: cargo[i].id }));
+  const onClick = (i: number) => select({ kind: 'cargo', id: cargo[i].id });
   const onDoubleClick = (i: number) => selectAndFocus({ kind: 'cargo', id: cargo[i].id });
 
   const highlight = [...new Set([selected, hovered].filter((x): x is string => !!x))];

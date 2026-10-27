@@ -1,16 +1,12 @@
 import { useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
 import { clock, useSim } from '../sim/clock';
-import { useControl } from '../sim/control';
 import { useLayers } from '../state/layers';
 import { useUi } from '../state/ui';
 import { useView } from '../state/view';
-import { useInventory } from '../world/inventory';
 import { useLoading } from '../loading/store';
-import { useJobs } from '../sim/jobs';
-import { useWorld } from '../world/store';
 import { useGame } from '../game/store';
-import { placeAt, startMove } from '../ui/actions';
+import { useProgress } from '../game/progress';
 
 interface ControlsLike {
   target: { set: (x: number, y: number, z: number) => void };
@@ -27,8 +23,7 @@ export function DevHooks() {
     if (!import.meta.env.DEV) return;
     (window as unknown as Record<string, unknown>).__yard = {
       clock,
-      actions: { placeAt, startMove },
-      stores: { ui: useUi, view: useView, layers: useLayers, inventory: useInventory, world: useWorld, control: useControl, sim: useSim, loading: useLoading, jobs: useJobs, game: useGame },
+      stores: { ui: useUi, view: useView, layers: useLayers, sim: useSim, loading: useLoading, game: useGame, progress: useProgress },
       /** Frames per second over `ms` (performance checks). */
       fps(ms = 3000) {
         return new Promise<number>((resolve) => {

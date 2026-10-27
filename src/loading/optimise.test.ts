@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ROUTES } from '../config/routes';
+/** The twin's route for TRUCK-102 (fixture). */
+const DEFAULT_ROUTES: Record<string, string[]> = { 'TRUCK-102': ['Eskişehir', 'Ankara', 'Kayseri'] };
 import { demoCargo } from '../world/demo';
 import { candidatesFor } from './candidates';
 import { optimise, optimiseInWorker, rankPlans } from './optimise';

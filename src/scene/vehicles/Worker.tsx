@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import * as THREE from 'three';
 import { groundAt, type WorkerSpec } from '../../config/fleet';
 import { clock } from '../../sim/clock';
-import { entityTime } from '../../sim/control';
 import { useLayers } from '../../state/layers';
 import { compileRoute, evalRoute, newPose } from '../../sim/route';
 import { useHighlight, useUi } from '../../state/ui';
@@ -46,7 +45,7 @@ export function Worker({ spec }: { spec: WorkerSpec }) {
 
   useFrame(() => {
     if (!route || !root.current) return;
-    evalRoute(route, entityTime(spec.id, clock.t), pose);
+    evalRoute(route, clock.t, pose);
     root.current.position.set(...yardToWorld(pose.x, pose.y, groundAt(pose.x, pose.y)));
     root.current.rotation.y = pose.heading;
     const phase = pose.odometer * 3.2;

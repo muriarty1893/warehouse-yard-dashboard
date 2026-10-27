@@ -160,3 +160,18 @@ export function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (
     </button>
   );
 }
+
+/** The Docktor mark and name. */
+export function Logo() {
+  return (
+    <div className="pointer-events-auto flex items-center gap-2.5 pr-2">
+      <svg width="30" height="30" viewBox="0 0 28 28" aria-hidden>
+        <rect width="28" height="28" rx="7" fill="#2f5ff0" />
+        <path d="M14 6.5l6.5 3.75L14 14 7.5 10.25z" fill="#fff" />
+        <path d="M7.5 10.25L14 14v7.5l-6.5-3.75z" fill="#fff" fillOpacity=".7" />
+        <path d="M20.5 10.25L14 14v7.5l6.5-3.75z" fill="#fff" fillOpacity=".45" />
+      </svg>
+      <span className="text-[20px] font-bold tracking-tight text-ink">Docktor</span>
+    </div>
+  );
+}

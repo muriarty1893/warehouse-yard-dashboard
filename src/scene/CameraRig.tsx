@@ -5,7 +5,6 @@ import { useUi } from '../state/ui';
 import { useView } from '../state/view';
 import { devYard } from '../config/devYard';
 import { yardBounds } from '../domain/yard';
-import { cancelPlacing, startMove, toggleHold } from '../ui/actions';
 import { focusEntity } from '../ui/focus';
 import { useLayers } from '../state/layers';
 import { yardToWorld } from './kit';
@@ -143,19 +142,6 @@ export function CameraRig() {
         case 't':
           view.send({ kind: 'top' });
           break;
-        case 'c':
-          ui.openDialog({ kind: 'cargo' });
-          keys.current.clear();
-          break;
-        case 'm':
-          if (sel?.kind === 'cargo') startMove(sel.id);
-          break;
-        case 'r':
-          if (ui.placing) ui.rotatePlacing();
-          break;
-        case 'g':
-          if (sel?.kind === 'truck' || sel?.kind === 'forklift') toggleHold(sel.id);
-          break;
         case 'l':
           view.toggleLayers();
           break;
@@ -174,10 +160,6 @@ export function CameraRig() {
           if (sel) focusEntity(sel);
           break;
         case 'escape':
-          if (ui.placing) {
-            cancelPlacing();
-            break;
-          }
           if (view.planner && !ui.selected) {
             view.closePlanner();
             break;

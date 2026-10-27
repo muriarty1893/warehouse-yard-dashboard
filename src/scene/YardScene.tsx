@@ -9,11 +9,9 @@ import { SimClock } from '../sim/clock';
 import { useLayers } from '../state/layers';
 import { CargoLayer } from './cargo/CargoLayer';
 import { Overlays } from './cargo/Overlays';
-import { Placement } from './cargo/Placement';
 import { Lighting } from './Lighting';
 import { GameForklifts, GameTrucks } from './game/GameVehicles';
 import { LoadView } from './loading/LoadView';
-import { RouteLines } from './RouteLines';
 import { GateArea } from './site/Gate';
 import { CameraRig, MAX_DISTANCE, MIN_DISTANCE, YARD_CENTER } from './CameraRig';
 import { DevHooks } from './DevHooks';
@@ -55,8 +53,6 @@ export function YardScene() {
       <GateArea />
       <CargoLayer />
       <Overlays />
-      <Placement />
-      <RouteLines />
       <GameTrucks />
       <LoadView />
       <GameForklifts />
