@@ -69,8 +69,11 @@ Mockups from brainstorming are in `.superpowers/brainstorm/` (git-ignored): `vis
 
 1. **Arriving:** drives in from the road on its recipe time (which may differ from the time on the
    briefing timeline; see incidents).
-2. **Waiting:** the first two waiting trucks park in P1 and P2 inside the gate; any more queue on
-   the road outside. The **gate waiting fee** runs after the free minutes, per truck.
+2. **Waiting:** waiting trucks line up at the kerb outside the yard wall, east of the gate,
+   nose to the gate (clear of the traffic lanes). Any of them can be called in; the ones behind move
+   up. (P1/P2 inside the gate don't work: they face east with the wall behind them, so a truck
+   coming in from the gate can't get in or out without driving through another one.) The **gate
+   waiting fee** runs after the free minutes, per truck.
 3. **Docking:** the player selects the truck and picks a free bay. The truck drives in and
    reverses onto the bay (the existing `bayVisit` legs, cut into one-shot stages).
 4. **Unloading:** the player picks the **storage area** for its cargo. The selection card suggests
@@ -198,7 +201,7 @@ Set by the recipe, at fixed times:
 |---|---|
 | `recipes.ts` | The 9 shifts as data: seed, bays and forklifts available, starting yard fill, truck schedule, incidents and times, budget, prices, star targets, mechanics switched on, hints. |
 | `generate.ts` | `generateShift(recipe) → ShiftSetup`: starting yard cargo (reusing the fill logic in `src/world/demo.ts`), inbound trucks with their units and missing papers, outbound trucks with stops and deadlines, the incident timeline, and the planned (briefing) timeline. Seeded with `mulberry32`. |
-| `engine.ts` | `act(state, action, t) → state` applies a player decision; `advance(state, t) → state` fires everything due by `t` in time order. Pure; the only randomness is the seeded rng held in the state. |
+| `engine.ts` | `act(state, action, t)` applies a player decision; `advance(state, t)` fires everything due by `t` in time order and returns the events (for toasts and hints). Both change the state object they are given and read nothing else: the only randomness is the seeded rng held in the state, so the same recipe and actions give the same result. |
 | `crew.ts` | The dispatcher (§1.4): job groups, picking the next job, nearest free forklift, the one-in-truck rule, planning each job's route over the grid. |
 | `ledger.ts` | Ledger entries `{ t, kind, amount, rule, ref }`, the price table, running fees, profit and cash. |
 | `report.ts` | Builds the report from the ledger: totals, fines in time order, and the lesson (the rule behind the biggest loss, with its advice line from the recipe's hint table). |
@@ -411,11 +414,12 @@ hazmat and temperature (left out of the planner earlier, still out).
 
 ## New and changed files (overview)
 
-- **New:** `src/game/{recipes,generate,engine,crew,ledger,report,progress,store,bots}.ts` + tests;
+- **New:** `src/game/{types,recipes,generate,places,legs,crew,planning,engine,ledger,select,report,progress,motion,store,bots}.ts` + tests;
   `src/ui/game/{Scoreboard,Timeline,CrewQueue,PapersPanel,SpendBar,SelectionCard,WorldTags,MoneyToasts,Hint,Campaign,Briefing,Report,PauseMenu,GameRoot}.tsx`;
   a `balance` npm script.
 - **Changed:** `src/App.tsx` (game root instead of the dashboard), `src/index.css` (theme tokens,
-  fonts), `src/sim/clock.ts` (speeds), `src/sim/loadingRun.ts` (geometry only),
+  fonts), `src/sim/clock.ts` (speeds), the dock-face and in-truck geometry of `src/sim/loadingRun.ts`
+  (moved into `src/game/legs.ts`; the rest of the file goes),
   `src/world/placement.ts` (`recommendSpot` restricted to an area), `src/scene/*` vehicle and cargo
   layers (poses and cargo from the game store), `src/loading/store.ts` and `src/ui/planner/*`
   (shift stops and cargo, hidden controls, Confirm queues jobs, theme), `package.json` (fonts,
