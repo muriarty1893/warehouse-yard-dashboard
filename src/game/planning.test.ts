@@ -32,7 +32,7 @@ describe('planning on the shift', () => {
     expect(free.length).toBeGreaterThanOrEqual(3);
     const carried = free[0];
     const written = free[1];
-    carried.transitJob = 'J-elsewhere';
+    s.cargo.find((c) => c.id === carried.id)!.transitJob = 'J-elsewhere';
     s.cargo.find((c) => c.id === written.id)!.gone = true;
     const ids = recommendPlan(s, 'TRUCK-OUT-2').placements.map((p) => p.cargoId);
     expect(ids.length).toBeGreaterThan(0);
