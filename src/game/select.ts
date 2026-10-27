@@ -23,7 +23,8 @@ export interface TimelineRow {
   selectable: boolean;
 }
 
-const min = (t: number) => shiftMinutes(t);
+/** Minutes after 06:00, rounded off float noise (display only). */
+const min = (t: number) => Math.round(shiftMinutes(t) * 1000) / 1000;
 
 export function timelineRows(s: ShiftState, t: number): TimelineRow[] {
   const now = min(t);

@@ -6,7 +6,7 @@ import { recommendSpot } from '../world/placement';
 import { addGroup, crewDue, dispatch, moveGroup, standing } from './crew';
 import { bayClosedUntil, has, hint, incidentDue } from './incidents';
 import { cash, gateWaitAmount, lateAmount, post } from './ledger';
-import { planningCargo } from './planning';
+import { planningCargo, recommendPlan } from './planning';
 import { arriveRoute, departRoute, dockRoute, kerbSlot, parkedPose, queueRoute, TEMP_IN, tempInRoute } from './places';
 import { clockLabel, secondsFor, shiftMinutes, type Action, type ActionResult, type Due, type GameEvent, type GameTruck, type ShiftState } from './types';
 
@@ -373,21 +373,36 @@ export function advance(s: ShiftState, t: number): GameEvent[] {
     if (!due || due.t > t) break;
     s.t = Math.max(s.t, due.t);
     events.push(...due.run());
-    settle(s, due.t);
+    events.push(...settle(s, due.t));
     dispatch(s, due.t);
   }
   s.t = Math.max(s.t, t);
   return events;
 }
 
-/** State conditions that follow from an event: empty inbound trucks leave. */
-function settle(s: ShiftState, t: number) {
-  if (s.over) return;
+/** An action the game takes for the player (a mechanic not yet taught): applied, but not logged. */
+function auto(s: ShiftState, a: Action, t: number): GameEvent[] {
+  const before = s.log.length;
+  const events: GameEvent[] = [];
+  act(s, a, t, events);
+  s.log.length = before;
+  return events;
+}
+
+/** State conditions that follow from an event: empty inbound trucks leave, and (before outbound is taught) loaded ones. */
+function settle(s: ShiftState, t: number): GameEvent[] {
+  const events: GameEvent[] = [];
+  if (s.over) return events;
   for (const tr of s.trucks) {
+    if (tr.kind === 'outbound' && tr.stage === 'docked' && !has(s, 'outbound') && !tr.dispatchPending && (isLoaded(tr) || !tr.plan)) {
+      events.push(...auto(s, { kind: 'dispatch', truckId: tr.id }, t));
+      continue;
+    }
     if (tr.kind !== 'inbound' || tr.stage !== 'docked' || tr.aboard.length) continue;
     const pending = s.jobs.some((j) => j.truckId === tr.id && (j.status === 'active' || j.status === 'queued') && !j.set);
     if (!pending) startDeparture(tr, t);
   }
+  return events;
 }
 
 function arrive(s: ShiftState, tr: GameTruck): GameEvent[] {
@@ -419,6 +434,11 @@ function motionEnd(s: ShiftState, tr: GameTruck): GameEvent[] {
       tr.pose = parkedPose(bayById(tr.bayId!));
       if (tr.kind === 'inbound' && !has(s, 'storage')) startUnload(s, tr, suggestArea(s, tr.id));
       if (tr.kind === 'inbound') return hint(s, 'storage');
+      // Before outbound trucks are taught, the planner's recommendation is confirmed for the player.
+      if (!has(s, 'outbound')) {
+        const plan = recommendPlan(s, tr.id);
+        if (plan.placements.length) auto(s, { kind: 'confirmPlan', truckId: tr.id, plan }, t);
+      }
       break;
     case 'departing':
       tr.stage = 'gone';

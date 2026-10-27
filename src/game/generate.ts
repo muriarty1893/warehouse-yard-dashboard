@@ -1,9 +1,10 @@
-import { road } from '../config/devYard';
+import { bayById, devYard, road } from '../config/devYard';
+import { bayRear } from '../domain/vehicles';
 import { DESTINATIONS, hashString, isStackable, makeUnit, mulberry32, type UnitLook } from '../domain/seed';
 import { pack } from '../loading/pack';
 import type { PackItem } from '../loading/types';
 import { vehicleById } from '../loading/vehicles';
-import { buildGrid, reachUnit } from '../sim/grid';
+import { buildGrid, findPath, reachUnit } from '../sim/grid';
 import { demoCargo } from '../world/demo';
 import { DEFAULT_PRICES } from './ledger';
 import { FORKLIFT_HOMES } from './places';
@@ -40,9 +41,15 @@ export function newShift(recipe: Recipe): ShiftState {
 
   const grid = buildGrid(cargo);
   const hasTop = new Set(cargo.map((c) => c.on).filter((id): id is string => !!id));
+  // A unit an outbound truck will need must be reachable and have a way to the bays.
+  const dockFace = bayRear(bayById(recipe.bays[0]));
+  const loadable = (c: GameCargo) => {
+    const a = reachUnit(grid, cargo, c);
+    return !!a && !!findPath(grid, a.stand, dockFace);
+  };
   const free = shuffled(
     rng,
-    cargo.filter((c) => !c.on && !hasTop.has(c.id) && c.look !== 'container' && c.look !== 'group-cartons' && reachUnit(grid, cargo, c)),
+    cargo.filter((c) => !c.on && !hasTop.has(c.id) && c.look !== 'container' && c.look !== 'group-cartons' && loadable(c)),
   );
   const unitsOf = new Map<string, string[]>();
   for (const t of outbound) {
@@ -50,6 +57,12 @@ export function newShift(recipe: Recipe): ShiftState {
     const mine = free.splice(0, t.units);
     mine.forEach((c, i) => (c.destination = stops[i % stops.length]));
     unitsOf.set(t.id, mine.map((c) => c.id));
+  }
+
+  // On a rainy day only `exposed` cartons and bags start out in the open; the rest are wrapped.
+  if (recipe.incidents.some((i) => i.kind === 'rain')) {
+    const open = shuffled(rng, cargo.filter((c) => (c.look === 'cartons' || c.look === 'bag') && !devYard.storage.find((a) => a.id === c.areaId)?.covered));
+    for (const c of open.slice(recipe.exposed ?? 8)) c.look = c.look === 'cartons' ? 'wrap-blue' : 'wrap-white';
   }
 
   const trucks: GameTruck[] = [];

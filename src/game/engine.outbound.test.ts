@@ -76,4 +76,12 @@ describe('outbound trucks', () => {
     const plan = confirm(d);
     expect(act(d, { kind: 'confirmPlan', truckId: 'TRUCK-OUT-1', plan }, d.t)).toEqual({ ok: false, reason: 'TRUCK-OUT-1 already has a confirmed plan' });
   });
+
+  test('with outbound off, a docked outbound truck plans, loads and leaves by itself', () => {
+    const s = docked(withRecipe({ mechanics: ['storage'], trucks: [TEST_RECIPE.trucks[0], { ...TEST_RECIPE.trucks[1], deadlineMin: 400 }] }));
+    const tr = truck(s, 'TRUCK-OUT-1');
+    expect(tr.plan?.placements.length).toBeGreaterThan(0);
+    advanceUntil(s, (x) => truck(x, 'TRUCK-OUT-1').stage === 'departing');
+    expect(s.ledger.filter((e) => e.kind === 'delivery')).toHaveLength(1);
+  });
 });

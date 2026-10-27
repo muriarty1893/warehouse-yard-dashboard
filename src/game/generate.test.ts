@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'vitest';
-import { devYard } from '../config/devYard';
+import { bayById, devYard } from '../config/devYard';
 import { areaAt } from '../domain/yard';
-import { buildGrid, reachUnit } from '../sim/grid';
+import { bayRear } from '../domain/vehicles';
+import { buildGrid, findPath, reachUnit } from '../sim/grid';
 import { recommendSpot } from '../world/placement';
-import { TEST_RECIPE, withRecipe } from './fixtures';
+import { packOne, TEST_RECIPE, withRecipe } from './fixtures';
+import { loadRoute } from './legs';
+import { FORKLIFT_HOMES, parkedPose } from './places';
+import { vehicleById } from '../loading/vehicles';
 import { newShift } from './generate';
 import { RECIPES, recipeById } from './recipes';
 import { secondsFor } from './types';
@@ -49,6 +53,28 @@ describe('newShift', () => {
 
   test('forklifts start at their homes, only the recipe’s ones', () => {
     expect(newShift(TEST_RECIPE).forklifts.map((f) => f.id)).toEqual(['FL-01', 'FL-02', 'FL-03']);
+  });
+
+  test('every forklift can reach every bay from its home, in every shift', () => {
+    for (const r of RECIPES) {
+      const s = newShift(r);
+      const grid = buildGrid(s.cargo.filter((c) => !c.loadedOn));
+      for (const f of s.forklifts) for (const b of ['L1', 'L2', 'L3', 'L4']) expect(findPath(grid, [f.pose.x, f.pose.y], bayRear(bayById(b))), `${r.id} ${f.id} → ${b}`).not.toBeNull();
+    }
+  });
+
+  test('every unit an outbound truck needs can be loaded at the start of the shift', () => {
+    for (const r of RECIPES) {
+      const s = newShift(r);
+      const yard = s.cargo.filter((c) => !c.loadedOn);
+      const grid = buildGrid(yard);
+      const truck = { pose: parkedPose(bayById('L1')), vehicle: vehicleById('rigid-26'), bay: bayById('L1') };
+      const stops = new Set(r.trucks.filter((t) => t.kind === 'outbound').flatMap((t) => t.stops ?? []));
+      for (const u of yard.filter((c) => stops.has(c.destination))) {
+        const route = loadRoute({ from: FORKLIFT_HOMES['FL-01'], grid, cargo: yard, unit: u, truck, placement: { ...packOne(u, 1), z: 1.3 }, t0: 0, truckFreeAt: -Infinity });
+        expect(route, `${r.id} ${u.id}`).not.toBeNull();
+      }
+    }
   });
 
   test('every recipe generates', () => {

@@ -130,37 +130,49 @@ export function checkSpot(cargo: Cargo[], item: Placeable, spot: Spot): PlaceChe
 /** Near the loading strip, where most outbound cargo leaves from. */
 const LOADING: [number, number] = [42.8, 31];
 
-/**
- * Placement recommendation (spec §37 step 13): the free floor spot nearest
- * the loading strip, covered areas first, else on top of a matching stack.
- */
-export function recommendSpot(cargo: Cargo[], item: Placeable, opts: { areaId?: string } = {}): (Spot & { label: string }) | null {
-  let best: { x: number; y: number; yaw: number; score: number; area: StorageArea } | null = null;
+/** Candidate floor spots of every storage area, best first (scores don't depend on the cargo, so they are computed once). */
+let candidates: { x: number; y: number; score: number; area: StorageArea }[] | null = null;
+function spotCandidates() {
+  if (candidates) return candidates;
+  const out: { x: number; y: number; score: number; area: StorageArea }[] = [];
   for (const area of devYard.storage) {
-    if (opts.areaId && area.id !== opts.areaId) continue;
     for (const part of area.parts) {
       const xs = part.map((p) => p[0]);
       const ys = part.map((p) => p[1]);
       for (let x = Math.min(...xs) + 0.5; x < Math.max(...xs); x += 0.5) {
         for (let y = Math.min(...ys) + 0.5; y < Math.max(...ys); y += 0.5) {
-          if (!pointInPolygon(x, y, part)) continue;
-          const score = Math.hypot(x - LOADING[0], y - LOADING[1]) + (area.covered ? 0 : 25);
-          if (best && score >= best.score) continue;
-          for (const yaw of [0, Math.PI / 2]) {
-            const r = checkFloor(cargo, item, x, y, yaw);
-            if (r.ok && r.areaId) {
-              best = { x, y, yaw, score, area };
-              break;
-            }
-          }
+          if (pointInPolygon(x, y, part)) out.push({ x, y, score: Math.hypot(x - LOADING[0], y - LOADING[1]) + (area.covered ? 0 : 25), area });
         }
       }
     }
   }
+  // Stable: equal scores keep the scan order.
+  candidates = out.sort((a, b) => a.score - b.score);
+  return candidates;
+}
+
+/**
+ * Placement recommendation (spec §37 step 13): the free floor spot nearest
+ * the loading strip, covered areas first, else on top of a matching stack.
+ * `accept` can reject spots (e.g. ones a forklift can't reach).
+ */
+export function recommendSpot(cargo: Cargo[], item: Placeable, opts: { areaId?: string; accept?: (spot: Spot) => boolean } = {}): (Spot & { label: string }) | null {
+  let best: { x: number; y: number; yaw: number; score: number; area: StorageArea } | null = null;
+  for (const cand of spotCandidates()) {
+    if (opts.areaId && cand.area.id !== opts.areaId) continue;
+    for (const yaw of [0, Math.PI / 2]) {
+      const r = checkFloor(cargo, item, cand.x, cand.y, yaw);
+      if (r.ok && r.areaId && (!opts.accept || opts.accept({ x: cand.x, y: cand.y, yaw }))) {
+        best = { x: cand.x, y: cand.y, yaw, score: cand.score, area: cand.area };
+        break;
+      }
+    }
+    if (best) break;
+  }
   if (best) return { x: best.x, y: best.y, yaw: best.yaw, label: `${best.area.name} · ${gridRef(devYard, best.x, best.y)}` };
   for (const c of cargo) {
     if (opts.areaId && c.areaId !== opts.areaId) continue;
-    if (checkStack(cargo, item, c.id).ok) return { on: c.id, label: `On top of ${c.id}` };
+    if (checkStack(cargo, item, c.id).ok && (!opts.accept || opts.accept({ on: c.id }))) return { on: c.id, label: `On top of ${c.id}` };
   }
   return null;
 }

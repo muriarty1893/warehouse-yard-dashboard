@@ -15,8 +15,8 @@ import { baseHeight } from '../world/placement';
  * a queue point behind it, one forklift inside the truck at a time.
  */
 
-const SPEED = 2.2;
-const ACCEL = 1.4;
+const SPEED = 3.0;
+const ACCEL = 1.8;
 /** Gap between one forklift leaving the truck and the next driving in (s). */
 export const MARGIN = 1.5;
 const TRAVEL_FORK = 0.4;
@@ -66,18 +66,31 @@ function dockGeometry(t: TruckAt, p: Placement) {
   return { entry, queue, inside, heading: t.pose.heading };
 }
 
+/**
+ * A path to a unit's stand point, coming in through the point 1.2 m behind it
+ * (so the forklift arrives straight) when that point is on the same floor and
+ * reachable; else straight to the stand.
+ */
+function pathToStand(g: Grid, from: Vec2, a: { stand: Vec2; heading: number }): Vec2[] | null {
+  const face: Vec2 = [Math.cos(a.heading), Math.sin(a.heading)];
+  const back: Vec2 = [a.stand[0] - face[0] * 1.2, a.stand[1] - face[1] * 1.2];
+  const level = Math.abs(heightAt(devYard, back[0], back[1]) - heightAt(devYard, a.stand[0], a.stand[1])) < 0.05;
+  const via = level && isFree(g, back[0], back[1]) ? findPath(g, from, back) : null;
+  const path = via ?? findPath(g, from, a.stand);
+  return path ? [...path, a.stand] : null;
+}
+
 /** Drive to a yard unit, lift it, back out. `lift` indexes the lifting wait. */
 function pickFromYard(g: Grid, cargo: Cargo[], unit: Cargo, from: Vec2, alongLength: boolean, carrying: string) {
   const a = reachUnit(g, cargo, unit, alongLength);
   if (!a) return null;
   const face: Vec2 = [Math.cos(a.heading), Math.sin(a.heading)];
-  const back: Vec2 = [a.stand[0] - face[0] * 1.2, a.stand[1] - face[1] * 1.2];
-  const toUnit = findPath(g, from, isFree(g, back[0], back[1]) ? back : a.stand);
+  const toUnit = pathToStand(g, from, a);
   if (!toUnit) return null;
   const z = Math.max(0, baseHeight(cargo, unit) - heightAt(devYard, unit.x, unit.y));
   const pickPose: Vec2 = [unit.x - face[0] * FORKLIFT.carryOffset, unit.y - face[1] * FORKLIFT.carryOffset];
   const picking = `Picking ${unit.id}`;
-  const legs: Leg[] = [{ kind: 'drive', phase: 'picking', path: tidy([...toUnit, a.stand]), radius: 1.2, fork: 0.12, status: picking }];
+  const legs: Leg[] = [{ kind: 'drive', phase: 'picking', path: tidy(toUnit), radius: 1.2, fork: 0.12, status: picking }];
   if (z > 0.05) legs.push({ kind: 'wait', phase: 'picking', seconds: 1.2, fork: [0.12, z + 0.1], status: picking });
   legs.push({ kind: 'drive', phase: 'picking', path: tidy([a.stand, pickPose]), speed: 0.8, fork: z + 0.1, status: picking });
   const lift = legs.length;
@@ -88,7 +101,7 @@ function pickFromYard(g: Grid, cargo: Cargo[], unit: Cargo, from: Vec2, alongLen
 }
 
 /** Drive a carried unit to a yard spot, set it down, back out. `set` indexes the setting-down wait. */
-function setInYard(g: Grid, cargo: Cargo[], unit: Cargo, spot: YardSpot, from: Vec2, carrying: string) {
+function setInYard(g: Grid, cargo: Cargo[], unit: Cargo, spot: YardSpot, from: Vec2, carrying: string, park: Pose) {
   let target: Cargo;
   let z = 0;
   let a: { stand: Vec2; heading: number } | null;
@@ -106,13 +119,12 @@ function setInYard(g: Grid, cargo: Cargo[], unit: Cargo, spot: YardSpot, from: V
   }
   if (!a) return null;
   const face: Vec2 = [Math.cos(a.heading), Math.sin(a.heading)];
-  const back: Vec2 = [a.stand[0] - face[0] * 1.2, a.stand[1] - face[1] * 1.2];
-  const toStand = findPath(g, from, isFree(g, back[0], back[1]) ? back : a.stand);
+  const toStand = pathToStand(g, from, a);
   if (!toStand) return null;
   const setPose: Vec2 = [target.x - face[0] * FORKLIFT.carryOffset, target.y - face[1] * FORKLIFT.carryOffset];
   const high = Math.max(TRAVEL_FORK, z + 0.3);
   const setting = `Storing ${unit.id}`;
-  const legs: Leg[] = [{ kind: 'drive', phase: 'carrying', path: tidy([...toStand, a.stand]), radius: 1.2, fork: TRAVEL_FORK, carry: true, status: carrying }];
+  const legs: Leg[] = [{ kind: 'drive', phase: 'carrying', path: tidy(toStand), radius: 1.2, fork: TRAVEL_FORK, carry: true, status: carrying }];
   if (high > TRAVEL_FORK + 0.01) legs.push({ kind: 'wait', phase: 'working', seconds: 1.2, fork: [TRAVEL_FORK, high], carry: true, status: setting });
   legs.push({ kind: 'drive', phase: 'working', path: tidy([a.stand, setPose]), speed: 0.8, fork: high, carry: true, status: setting });
   const set = legs.length;
@@ -120,7 +132,10 @@ function setInYard(g: Grid, cargo: Cargo[], unit: Cargo, spot: YardSpot, from: V
   legs.push({ kind: 'wait', phase: 'working', seconds: 0.6, fork: [z + 0.12, z + 0.04], status: setting });
   legs.push({ kind: 'drive', phase: 'returning', path: tidy([setPose, a.stand]), reverse: true, speed: 1.0, fork: z + 0.04, status: 'Returning' });
   legs.push({ kind: 'wait', phase: 'returning', seconds: 0.8, fork: [z + 0.04, 0.12], status: 'Returning' });
-  return { legs, set, end: { x: a.stand[0], y: a.stand[1], heading: a.heading } };
+  // Back to the loading strip, so later storage can't wall the forklift in.
+  const home = findPath(g, a.stand, [park.x, park.y]);
+  if (home) legs.push({ kind: 'drive', phase: 'returning', path: tidy([a.stand, ...home, [park.x, park.y]]), radius: 1.2, fork: 0.12, status: 'Returning' });
+  return { legs, set, end: home ? park : { x: a.stand[0], y: a.stand[1], heading: a.heading } };
 }
 
 /** Times of a finished leg list, shifted to engine time. */
@@ -171,7 +186,7 @@ export function loadRoute(a: { from: Pose; grid: Grid; cargo: Cargo[]; unit: Car
 }
 
 /** Truck → yard spot: wait for the truck, drive in, lift the unit, back out, store it. */
-export function unloadRoute(a: { from: Pose; grid: Grid; cargo: Cargo[]; unit: Cargo; truck: TruckAt; placement: Placement; spot: YardSpot; t0: number; truckFreeAt: number }): JobRoute | null {
+export function unloadRoute(a: { from: Pose; grid: Grid; cargo: Cargo[]; unit: Cargo; truck: TruckAt; placement: Placement; spot: YardSpot; t0: number; truckFreeAt: number; park?: Pose }): JobRoute | null {
   const { grid: g, cargo, unit, placement: p, t0 } = a;
   const geo = dockGeometry(a.truck, p);
   const toQueue = findPath(g, [a.from.x, a.from.y], geo.queue);
@@ -189,7 +204,7 @@ export function unloadRoute(a: { from: Pose; grid: Grid; cargo: Cargo[]; unit: C
   const leave = legs.length;
   legs.push({ kind: 'drive', phase: 'carrying', path: tidy([geo.inside, geo.entry]), reverse: true, speed: 1.0, fork: p.z + 0.3, carry: true, status: unloading });
   if (Math.abs(p.z + 0.3 - TRAVEL_FORK) > 0.01) legs.push({ kind: 'wait', phase: 'carrying', seconds: 1.2, fork: [p.z + 0.3, TRAVEL_FORK], carry: true, status: unloading });
-  const put = setInYard(g, cargo, unit, a.spot, geo.entry, `To storage · ${unit.id}`);
+  const put = setInYard(g, cargo, unit, a.spot, geo.entry, `To storage · ${unit.id}`, a.park ?? { x: geo.queue[0], y: geo.queue[1], heading: geo.heading + Math.PI });
   if (!put) return null;
   const first = legs.length;
   legs.push(...put.legs);
@@ -198,13 +213,13 @@ export function unloadRoute(a: { from: Pose; grid: Grid; cargo: Cargo[]; unit: C
 }
 
 /** Yard unit → another yard spot. */
-export function moveRoute(a: { from: Pose; grid: Grid; cargo: Cargo[]; unit: Cargo; spot: YardSpot; t0: number }): JobRoute | null {
+export function moveRoute(a: { from: Pose; grid: Grid; cargo: Cargo[]; unit: Cargo; spot: YardSpot; t0: number; park?: Pose }): JobRoute | null {
   const { grid: g, cargo, unit, t0 } = a;
   const pick = pickFromYard(g, cargo, unit, [a.from.x, a.from.y], true, `Moving ${unit.id}`);
   if (!pick) return null;
   clearUnit(g, unit);
   try {
-    const put = setInYard(g, cargo, unit, a.spot, pick.at, `Moving ${unit.id}`);
+    const put = setInYard(g, cargo, unit, a.spot, pick.at, `Moving ${unit.id}`, a.park ?? a.from);
     if (!put) return null;
     const legs = [...pick.legs, ...put.legs];
     const tm = times(legs, t0);

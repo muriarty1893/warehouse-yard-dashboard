@@ -14,7 +14,7 @@ import type { FillLevel } from '../world/demo';
 
 export const SHIFT_START_MIN = 360; // 06:00
 export const SHIFT_LENGTH_MIN = 480; // to 14:00
-export const SHIFT_MIN_PER_SEC = 0.8;
+export const SHIFT_MIN_PER_SEC = 0.6;
 export const shiftMinutes = (t: number) => t * SHIFT_MIN_PER_SEC;
 export const secondsFor = (minutes: number) => minutes / SHIFT_MIN_PER_SEC;
 
@@ -84,6 +84,8 @@ export interface Recipe {
   budget: number;
   prices?: Partial<Prices>;
   clerkMin?: number;
+  /** Rain shifts: how many cartons and bags start out in the open (default 8). */
+  exposed?: number;
   targets: [number, number, number];
 }
 

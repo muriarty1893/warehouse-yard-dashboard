@@ -31,11 +31,12 @@ export const kerbSlot = (k: number): Pose => ({ x: 57 + 12.5 * k, y: KERB_Y, hea
 /** Where a game truck stands in a bay: the planner's frame, so packed units line up. */
 export const parkedPose = (bay: TruckBay): Pose => truckPoseFor(bay, vehicleById('rigid-26'));
 
-/** Where each forklift starts the shift. */
+/** Where each forklift starts the shift: on the loading strip behind the bays, where every bay can be reached. */
 export const FORKLIFT_HOMES: Record<string, Pose> = {
-  'FL-01': { x: 33.0, y: 31.4, heading: 0 },
-  'FL-02': { x: 17.0, y: 19.2, heading: Math.PI / 2 },
   ...Object.fromEntries(fleetForklifts.filter((f) => f.pose).map((f) => [f.id, f.pose!])),
+  'FL-01': { x: 33.0, y: 31.4, heading: 0 },
+  'FL-02': { x: 38.5, y: 30.4, heading: 0 },
+  'FL-03': { x: 47.8, y: 30.4, heading: Math.PI },
 };
 
 /** A temp forklift drives in through the gate and waits here. */

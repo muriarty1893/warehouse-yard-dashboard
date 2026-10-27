@@ -4,9 +4,10 @@ import { bayRear } from '../domain/vehicles';
 import { areaAt } from '../domain/yard';
 import type { Placement } from '../loading/types';
 import { vehicleById } from '../loading/vehicles';
-import { buildGrid } from '../sim/grid';
+import { approachFor, buildGrid, clearUnit, reachUnit, restoreUnit, type Grid } from '../sim/grid';
 import { recommendSpot } from '../world/placement';
 import { loadRoute, moveRoute, unloadRoute, type JobRoute, type YardSpot } from './legs';
+import { FORKLIFT_HOMES, TEMP_IN } from './places';
 import { post } from './ledger';
 import type { Due, GameCargo, GameEvent, GameForklift, Job, JobGroup, JobKind, ShiftState } from './types';
 
@@ -76,10 +77,135 @@ export function standing(s: ShiftState, except?: string): Cargo[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// The yard grid, cached while nothing in the yard changes (derived data, not state)
+
+/** Everything about the yard that paths and spots depend on. */
+function yardKey(s: ShiftState): string {
+  let k = '';
+  for (const c of s.cargo) {
+    const job = c.transitJob ? jobOf(s, c.transitJob) : undefined;
+    k += `${c.id}:${c.x},${c.y},${c.yaw},${c.on ?? ''},${c.gone ? 1 : 0}${c.loadedOn ? 1 : 0},${c.transitJob ?? ''}${job?.picked ? 1 : 0};`;
+  }
+  return k;
+}
+
+const yardCache = new WeakMap<ShiftState, { key: string; cargo: Cargo[]; grid: Grid }>();
+
+function yard(s: ShiftState) {
+  const key = yardKey(s);
+  const hit = yardCache.get(s);
+  if (hit?.key === key) return hit;
+  const cargo = standing(s);
+  const fresh = { key, cargo, grid: buildGrid(cargo) };
+  yardCache.set(s, fresh);
+  return fresh;
+}
+
+/** Run `fn` on the yard's cargo and grid, with `without` taken out of both (the grid is restored after). */
+function withYard<T>(s: ShiftState, without: string | null, fn: (cargo: Cargo[], grid: Grid) => T): T {
+  const y = yard(s);
+  const out = without ? y.cargo.find((c) => c.id === without) : undefined;
+  const cargo = out ? y.cargo.filter((c) => c !== out) : y.cargo;
+  if (out) clearUnit(y.grid, out);
+  try {
+    return fn(cargo, y.grid);
+  } finally {
+    if (out) restoreUnit(y.grid, out);
+  }
+}
+
+/** Where a forklift goes back to after a yard job. */
+const parkOf = (f: GameForklift) => FORKLIFT_HOMES[f.id] ?? TEMP_IN;
+
+/** Floor cells a forklift can drive to from `from` (8 neighbours, no steps higher than a ramp). */
+function openFloor(g: Grid, from: [number, number]): Uint8Array {
+  const seen = new Uint8Array(g.nx * g.ny);
+  const i0 = Math.floor((from[0] - g.x0) / g.cell);
+  const j0 = Math.floor((from[1] - g.y0) / g.cell);
+  if (i0 < 0 || j0 < 0 || i0 >= g.nx || j0 >= g.ny) return seen;
+  const queue = [j0 * g.nx + i0];
+  seen[queue[0]] = 1;
+  for (let q = 0; q < queue.length; q++) {
+    const k = queue[q];
+    const i = k % g.nx;
+    const j = (k - i) / g.nx;
+    for (let dj = -1; dj <= 1; dj++)
+      for (let di = -1; di <= 1; di++) {
+        const ii = i + di;
+        const jj = j + dj;
+        if ((!di && !dj) || ii < 0 || jj < 0 || ii >= g.nx || jj >= g.ny) continue;
+        const n = jj * g.nx + ii;
+        if (seen[n] || g.blocked[n] || Math.abs(g.h[n] - g.h[k]) > 0.3) continue;
+        if (di && dj && (g.blocked[j * g.nx + ii] || g.blocked[jj * g.nx + i])) continue;
+        seen[n] = 1;
+        queue.push(n);
+      }
+  }
+  return seen;
+}
+
+const cellIn = (g: Grid, open: Uint8Array, p: [number, number]) => {
+  const i = Math.floor((p[0] - g.x0) / g.cell);
+  const j = Math.floor((p[1] - g.y0) / g.cell);
+  return i >= 0 && j >= 0 && i < g.nx && j < g.ny && !!open[j * g.nx + i];
+};
+
+/** Yard units an outbound truck still in play will want: their access must stay open. */
+function wanted(s: ShiftState, cargo: Cargo[]): Cargo[] {
+  const stops = new Set(s.trucks.filter((t) => t.kind === 'outbound' && t.stage !== 'departing' && t.stage !== 'gone').flatMap((t) => t.stops));
+  return cargo.filter((c) => stops.has(c.destination));
+}
+
+/**
+ * The best spot in the area that a forklift can drive up to, and that
+ * doesn't wall in a unit an outbound truck still needs.
+ */
+const spotMemo = new WeakMap<ShiftState, { yard: string; spots: Map<string, YardSpot | null> }>();
+
 function spotFor(s: ShiftState, unit: GameCargo, areaId: string | null): YardSpot | null {
-  const spot = recommendSpot(standing(s, unit.id), unit, areaId ? { areaId } : {});
-  if (!spot) return null;
-  return 'on' in spot ? { on: spot.on } : { x: spot.x, y: spot.y, yaw: spot.yaw };
+  const y = yard(s).key;
+  let memo = spotMemo.get(s);
+  if (memo?.yard !== y) spotMemo.set(s, (memo = { yard: y, spots: new Map() }));
+  const inPlay = s.trucks.filter((t) => t.kind === 'outbound' && t.stage !== 'departing' && t.stage !== 'gone').map((t) => t.id).join(',');
+  const key = `${unit.id}|${areaId}|${inPlay}`;
+  if (!memo.spots.has(key)) memo.spots.set(key, findSpot(s, unit, areaId));
+  return memo.spots.get(key)!;
+}
+
+function findSpot(s: ShiftState, unit: GameCargo, areaId: string | null): YardSpot | null {
+  return withYard(s, unit.id, (cargo, grid) => {
+    const dock = bayRear(bayById(s.recipe.bays[0]));
+    const from: [number, number] = [dock[0], dock[1] + 2.5];
+    const before = openFloor(grid, from);
+    // Units an outbound truck still wants, that a forklift can get to from the bays today.
+    const keep = wanted(s, cargo)
+      .filter((c) => !c.on)
+      .map((c) => ({ c, a: reachUnit(grid, cargo, c) }))
+      .filter((k) => k.a && cellIn(grid, before, k.a.stand));
+    const accept = (sp: YardSpot) => {
+      if ('on' in sp) {
+        const base = cargo.find((c) => c.id === sp.on);
+        return !!base && !keep.some((k) => k.c === base) && !!reachUnit(grid, cargo, base);
+      }
+      const ghost: Cargo = { ...unit, x: sp.x, y: sp.y, yaw: sp.yaw, on: null };
+      const own = approachFor(grid, ghost, true);
+      if (!own || !cellIn(grid, before, own.stand)) return false;
+      restoreUnit(grid, ghost);
+      try {
+        const after = openFloor(grid, from);
+        return keep.every((k) => {
+          const a = Math.hypot(k.c.x - sp.x, k.c.y - sp.y) < 4.5 ? reachUnit(grid, cargo, k.c) : k.a;
+          return !!a && cellIn(grid, after, a.stand);
+        });
+      } finally {
+        clearUnit(grid, ghost);
+      }
+    };
+    const spot = recommendSpot(cargo, unit, { ...(areaId ? { areaId } : {}), accept });
+    if (!spot) return null;
+    return 'on' in spot ? { on: spot.on } : { x: spot.x, y: spot.y, yaw: spot.yaw };
+  });
 }
 
 function pickupPoint(s: ShiftState, job: Job, unit: GameCargo): [number, number] {
@@ -94,19 +220,31 @@ function planRoute(s: ShiftState, job: Job, unit: GameCargo, f: GameForklift, sp
   const tr = job.truckId ? s.trucks.find((x) => x.id === job.truckId) : undefined;
   const truckAt = tr?.bayId ? { pose: tr.pose, vehicle: vehicleById(tr.vehicle), bay: bayById(tr.bayId) } : null;
   if (job.kind === 'load') {
-    const cargo = standing(s);
     if (!truckAt || !job.placement) return null;
-    return loadRoute({ from: f.pose, grid: buildGrid(cargo), cargo, unit, truck: truckAt, placement: job.placement, t0: t, truckFreeAt: tr!.busyUntil });
+    return withYard(s, null, (cargo, grid) => loadRoute({ from: f.pose, grid, cargo, unit, truck: truckAt, placement: job.placement!, t0: t, truckFreeAt: tr!.busyUntil }));
   }
-  const cargo = standing(s, unit.id);
   if (job.kind === 'unload') {
     if (!truckAt || !job.placement || !spot) return null;
-    return unloadRoute({ from: f.pose, grid: buildGrid(cargo), cargo, unit, truck: truckAt, placement: job.placement, spot, t0: t, truckFreeAt: tr!.busyUntil });
+    return withYard(s, unit.id, (cargo, grid) => unloadRoute({ from: f.pose, grid, cargo, unit, truck: truckAt, placement: job.placement!, spot, t0: t, truckFreeAt: tr!.busyUntil, park: parkOf(f) }));
   }
   if (!spot) return null;
-  const withUnit = [...cargo, unit];
-  return moveRoute({ from: f.pose, grid: buildGrid(withUnit), cargo: withUnit, unit, spot, t0: t });
+  return withYard(s, null, (cargo, grid) => moveRoute({ from: f.pose, grid, cargo, unit, spot, t0: t, park: parkOf(f) }));
 }
+
+/**
+ * A truck's next job can't be done and won't be by waiting: it was tried just
+ * now, with the yard as it is and every forklift free, and nothing could do it.
+ */
+export function jobStuck(s: ShiftState, truckId: string, t: number): boolean {
+  const next = s.jobs.find((j) => j.truckId === truckId && j.kind === 'load' && j.status === 'queued');
+  if (!next?.blocked || s.jobs.some((j) => j.truckId === truckId && j.status === 'active')) return false;
+  const free = s.forklifts.filter((f) => forkliftFree(f, t));
+  return free.length === s.forklifts.filter((f) => !f.temp || f.arrivesAt === null).length && lastTry.get(next) === tryKey(s, free);
+}
+
+/** Inputs a blocked job was last tried with; the same inputs give the same answer, so it isn't retried. */
+const lastTry = new WeakMap<Job, string>();
+const tryKey = (s: ShiftState, free: GameForklift[]) => `${yard(s).key}|${free.map((f) => `${f.id}@${f.pose.x},${f.pose.y}`).join(';')}`;
 
 function assign(s: ShiftState, job: Job, unit: GameCargo, f: GameForklift, r: JobRoute, spot: YardSpot | null, t: number) {
   Object.assign(job, { status: 'active', forkliftId: f.id, pickAt: r.pickAt, setAt: r.setAt, doneAt: r.doneAt, enterAt: r.enterAt, leaveAt: r.leaveAt, end: r.end, blocked: null });
@@ -139,6 +277,9 @@ export function dispatch(s: ShiftState, t: number) {
       if (tr && (tr.stage !== 'docked' || tr.dispatchPending)) continue;
       const unit = unitOf(s, job.unitId);
       if (!unit || unit.gone) continue;
+      const key = tryKey(s, free);
+      if (job.blocked && lastTry.get(job) === key) continue;
+      lastTry.set(job, key);
       let spot: YardSpot | null = null;
       if (job.kind !== 'load') {
         spot = spotFor(s, unit, job.areaId);
