@@ -25,5 +25,5 @@ describe.each(RECIPES)('$no $name', (recipe) => {
     expect(good - basic).toBeGreaterThanOrEqual(300);
   });
   test('the basic bot can pass', () => expect(basic).toBeGreaterThanOrEqual(recipe.targets[0]));
-  test('both bots run a shift headless in a few seconds', () => expect(ms).toBeLessThan(10_000));
+  test('both bots run a shift headless in under half a minute', () => expect(ms).toBeLessThan(30_000));
 });

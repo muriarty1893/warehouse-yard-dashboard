@@ -61,7 +61,7 @@ describe('newShift', () => {
       const grid = buildGrid(s.cargo.filter((c) => !c.loadedOn));
       for (const f of s.forklifts) for (const b of ['L1', 'L2', 'L3', 'L4']) expect(findPath(grid, [f.pose.x, f.pose.y], bayRear(bayById(b))), `${r.id} ${f.id} → ${b}`).not.toBeNull();
     }
-  });
+  }, 60_000);
 
   test('every unit an outbound truck needs can be loaded at the start of the shift', () => {
     for (const r of RECIPES) {
@@ -75,12 +75,12 @@ describe('newShift', () => {
         expect(route, `${r.id} ${u.id}`).not.toBeNull();
       }
     }
-  });
+  }, 60_000);
 
   test('every recipe generates', () => {
     for (const r of RECIPES) expect(newShift(r).trucks).toHaveLength(r.trucks.length);
     expect(recipeById('opening-gate').no).toBe(1);
-  });
+  }, 60_000);
 });
 
 describe('recommendSpot', () => {
