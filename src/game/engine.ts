@@ -5,6 +5,7 @@ import { compileRoute, evalRoute, newPose, type RouteSpec } from '../sim/route';
 import { recommendSpot } from '../world/placement';
 import { addGroup, crewDue, dispatch, standing } from './crew';
 import { gateWaitAmount, lateAmount, post } from './ledger';
+import { planningCargo } from './planning';
 import { arriveRoute, departRoute, dockRoute, kerbSlot, parkedPose, queueRoute } from './places';
 import { clockLabel, shiftMinutes, type Action, type ActionResult, type Due, type GameEvent, type GameTruck, type ShiftState } from './types';
 
@@ -118,6 +119,36 @@ function startDeparture(tr: GameTruck, t: number) {
   move(tr, spec, t);
 }
 
+/** Every planned unit aboard. */
+export const isLoaded = (tr: GameTruck) => !!tr.plan && tr.plan.placements.every((p) => tr.aboard.includes(p.cargoId));
+
+/** An outbound truck leaves: paid for what is aboard, fined for lateness, missing papers and units left behind. */
+function depart(s: ShiftState, tr: GameTruck, t: number): GameEvent[] {
+  const events: GameEvent[] = [];
+  tr.dispatchPending = false;
+  const n = tr.aboard.length;
+  if (n) events.push(post(s, { t, kind: 'delivery', amount: n * (tr.rush ? s.prices.rushDelivery : s.prices.delivery), text: `${tr.id} dispatched · ${n} units`, ref: tr.id }));
+  if (tr.deadline !== null && t > tr.deadline) {
+    const minutes = shiftMinutes(t - tr.deadline);
+    events.push(post(s, { t, kind: 'late', amount: lateAmount(s.prices, minutes), text: `${tr.id} left ${Math.round(minutes)} min late`, ref: tr.id }));
+  }
+  for (const id of tr.aboard) {
+    const c = s.cargo.find((u) => u.id === id);
+    if (c?.papers === 'missing') events.push(post(s, { t, kind: 'missingPapers', amount: -s.prices.missingPapers, text: `${id} left without papers`, ref: id }));
+  }
+  for (const p of tr.plan?.placements ?? []) {
+    const c = s.cargo.find((u) => u.id === p.cargoId);
+    if (tr.aboard.includes(p.cargoId) || !c || c.gone) continue;
+    events.push(post(s, { t, kind: 'missedTruck', amount: -s.prices.missedTruck, text: `${p.cargoId} left behind by ${tr.id}`, ref: p.cargoId }));
+  }
+  for (const id of tr.aboard) {
+    const c = s.cargo.find((u) => u.id === id);
+    if (c) c.gone = true;
+  }
+  startDeparture(tr, t);
+  return events;
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 
@@ -140,11 +171,24 @@ export function validate(s: ShiftState, a: Action, t: number): ActionResult {
       if (!tr.aboard.length) return no(`${tr.id} is already empty`);
       return ok;
     }
+    case 'confirmPlan': {
+      const tr = truckOf(s, a.truckId);
+      if (!tr) return no(`No truck ${a.truckId}`);
+      if (tr.kind !== 'outbound') return no(`${tr.id} is not collecting cargo`);
+      if (tr.stage !== 'docked') return no(`${tr.id} is not docked`);
+      if (tr.plan) return no(`${tr.id} already has a confirmed plan`);
+      if (!a.plan.placements.length) return no('The plan has no cargo');
+      const free = new Set(planningCargo(s).map((c) => c.id));
+      const gone = a.plan.placements.find((p) => !free.has(p.cargoId));
+      return gone ? no(`${gone.cargoId} is no longer available`) : ok;
+    }
     case 'dispatch': {
       const tr = truckOf(s, a.truckId);
       if (!tr) return no(`No truck ${a.truckId}`);
       if (tr.kind !== 'outbound') return no(`${tr.id} leaves on its own once it is empty`);
-      return no('Not available yet');
+      if (tr.stage !== 'docked') return no(`${tr.id} is not docked`);
+      if (tr.dispatchPending) return no(`${tr.id} is already leaving`);
+      return ok;
     }
     default:
       return no('Not available yet');
@@ -178,6 +222,21 @@ export function act(s: ShiftState, a: Action, t: number, events: GameEvent[] = [
     case 'chooseArea':
       startUnload(s, truckOf(s, a.truckId)!, a.areaId);
       break;
+    case 'confirmPlan': {
+      const tr = truckOf(s, a.truckId)!;
+      tr.plan = a.plan;
+      tr.load = a.plan.placements;
+      const order = [...a.plan.placements].sort((x, y) => x.seq - y.seq);
+      addGroup(s, { kind: 'load', label: `Load ${tr.id}`, truckId: tr.id, areaId: null, units: order.map((p) => ({ unitId: p.cargoId, placement: p })) });
+      break;
+    }
+    case 'dispatch': {
+      const tr = truckOf(s, a.truckId)!;
+      for (const j of s.jobs) if (j.truckId === tr.id && j.status === 'queued') j.status = 'cancelled';
+      if (t < tr.busyUntil) tr.dispatchPending = true;
+      else events.push(...depart(s, tr, t));
+      break;
+    }
     default:
       break;
   }
@@ -194,6 +253,7 @@ function engineDue(s: ShiftState): Due[] {
   for (const tr of s.trucks) {
     if (tr.stage === 'scheduled') out.push({ t: tr.arriveAt, order: 1, id: tr.id, run: () => arrive(s, tr) });
     if (tr.motion) out.push({ t: tr.motion.until, order: 2, id: tr.id, run: () => motionEnd(s, tr) });
+    if (tr.dispatchPending && tr.stage === 'docked') out.push({ t: tr.busyUntil, order: 4, id: tr.id, run: () => depart(s, tr, tr.busyUntil) });
   }
   out.push({ t: s.end, order: 99, id: 'end', run: () => endShift(s) });
   return out;
