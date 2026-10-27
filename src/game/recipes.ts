@@ -1,3 +1,4 @@
+import { setCampaignOrder } from './progress';
 import type { HintKey, Recipe } from './types';
 
 /**
@@ -51,3 +52,5 @@ export const HINTS: Record<HintKey, { title: string; text: string; anchor: 'time
   rushOrder: { title: 'Rush order', text: 'A truck nobody expected, paying double, with a tight deadline. Taking it may make something else late.', anchor: 'timeline' },
   overtime: { title: 'Overtime', text: 'One hour left. Overtime keeps the yard open 30 more minutes for €400.', anchor: 'spend' },
 };
+
+setCampaignOrder(RECIPES.map((r) => r.id));
