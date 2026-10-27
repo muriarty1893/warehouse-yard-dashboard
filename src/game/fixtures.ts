@@ -144,3 +144,29 @@ export function runAll(dueFn: (s: ShiftState) => Due[], s: ShiftState, limit: nu
 
 /** A blocker unit for tests: a GameCargo copy of `like` at (x, y). */
 export const blocker = (like: GameCargo, id: string, x: number, y: number): GameCargo => ({ ...like, id, x, y, dims: { l: 1, w: 1, h: 1 }, on: null, loadedOn: null, transitJob: null });
+
+// ---------------------------------------------------------------------------
+// Engine helpers
+
+import { act, advance } from './engine';
+import type { Action } from './types';
+
+/** Step `advance` by `step` seconds, acting each scripted action at its exact time, until past the end. */
+export function runScripted(recipe: Recipe, plan: { t: number; action: Action }[], step: number): ShiftState {
+  const s = newShift(recipe);
+  let t = 0;
+  for (const p of [...plan].sort((a, b) => a.t - b.t)) {
+    while (t + step < p.t) advance(s, (t += step));
+    t = p.t;
+    act(s, p.action, p.t);
+  }
+  while (t < s.end + 1) advance(s, (t = Math.min(t + step, s.end + 1)));
+  return s;
+}
+
+/** Advance in small steps until `until(s)` holds (or the shift ends); returns the time reached. */
+export function advanceUntil(s: ShiftState, until: (s: ShiftState) => boolean, step = 0.5): number {
+  let t = s.t;
+  while (!until(s) && t < s.end + 1) advance(s, (t += step));
+  return t;
+}
