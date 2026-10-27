@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLoading } from '../../loading/store';
 import { useUi } from '../../state/ui';
+import { useView } from '../../state/view';
 import { Modal } from '../Dialog';
 import { Button, Field, inputClass } from '../kit';
 
@@ -12,7 +13,10 @@ export function ConfirmPrompt({ truckId }: { truckId: string }) {
   const confirm = () => {
     const r = useLoading.getState().confirm(truckId, { overrideReason: reason });
     useUi.getState().notify(r.ok ? `Plan for ${truckId} confirmed despite: ${issues[0] ?? 'a failed check'}` : r.reason, r.ok ? 'ok' : 'error');
-    if (r.ok) close();
+    if (r.ok) {
+      close();
+      useView.getState().closePlanner();
+    }
   };
   return (
     <Modal title="Confirm anyway?" subtitle="This plan breaks a loading rule. It is kept with your reason." onClose={close} width={480}>

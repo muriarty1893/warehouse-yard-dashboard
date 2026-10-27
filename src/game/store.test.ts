@@ -74,4 +74,24 @@ describe('game store', () => {
     g.startShift();
     expect(useGame.getState().act({ kind: 'overtime' })).toEqual({ ok: false, reason: 'No overtime in this shift' });
   });
+
+  test('the planner plans docked outbound trucks and confirming puts the load in the crew queue', async () => {
+    const { useLoading } = await import('../loading/store');
+    const g = useGame.getState();
+    g.openBriefing('first-load');
+    g.startShift();
+    const shift = useGame.getState().shift!;
+    const tr = shift.trucks.find((t) => t.kind === 'outbound')!;
+    for (clock.t = 0; tr.stage !== 'waiting'; clock.t += 1) useGame.getState().tick();
+    expect(useGame.getState().act({ kind: 'assignBay', truckId: tr.id, bayId: 'L1' })).toEqual({ ok: true });
+    for (; (tr.stage as string) !== 'docked'; clock.t += 1) useGame.getState().tick();
+    useGame.getState().tick();
+    expect(Object.keys(useLoading.getState().trucks)).toEqual([tr.id]);
+    const r = useLoading.getState().confirm(tr.id, { overrideReason: 'test' });
+    expect(r).toEqual({ ok: true });
+    expect(tr.plan).not.toBeNull();
+    expect(shift.groups.some((x) => x.kind === 'load' && x.truckId === tr.id)).toBe(true);
+    useGame.getState().tick();
+    expect(Object.keys(useLoading.getState().trucks)).toEqual([]);
+  });
 });

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { planOf, useLoading } from '../../loading/store';
+import { planOf, useLoading, usePlanCargo } from '../../loading/store';
 import { useUi } from '../../state/ui';
-import { useInventory } from '../../world/inventory';
 import { inYard, locationOf } from '../../world/placement';
 import { Modal } from '../Dialog';
 import { Button, Field, inputClass } from '../kit';
@@ -12,7 +11,7 @@ export function UrgentPicker({ truckId }: { truckId: string }) {
   const close = () => useUi.getState().openDialog(null);
   const route = useLoading((s) => s.trucks[truckId]?.route ?? []);
   const trucks = useLoading((s) => s.trucks);
-  const cargo = useInventory((s) => s.cargo);
+  const cargo = usePlanCargo();
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<string | null>(null);
   const [stop, setStop] = useState(1);

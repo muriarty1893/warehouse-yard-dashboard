@@ -2,7 +2,6 @@ import { Boxes, Gauge, Layers, Rows3, Weight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { planOf, useLoading } from '../../loading/store';
 import { vehicleById } from '../../loading/vehicles';
-import { useInventory } from '../../world/inventory';
 import { Card } from '../kit';
 import { fmtT } from './format';
 
@@ -25,7 +24,6 @@ function Kpi({ icon, label, value, unit, sub }: { icon: ReactNode; label: string
 /** The plan in five numbers (spec §2.1). */
 export function PlannerKpis({ truckId }: { truckId: string }) {
   const plan = useLoading((s) => planOf(s, truckId));
-  const loaded = useInventory((s) => s.cargo.filter((c) => c.loadedOn?.truckId === truckId).length);
   if (!plan) return null;
   const v = vehicleById(plan.vehicle);
   const st = plan.stats;
@@ -38,7 +36,7 @@ export function PlannerKpis({ truckId }: { truckId: string }) {
       <Kpi icon={<Gauge size={13} />} label="Remaining capacity" value={left} unit={lUnit} sub={<>the <b className="text-ink">{st.limitedBy}</b> limits it here</>} />
       <Kpi icon={<Layers size={13} />} label="Fill, volume and weight" value={`${Math.round(st.volumePct)}% · ${Math.round(st.weightPct)}%`} sub={`${st.units} units in ${v.inner.l} m`} />
       <Kpi icon={<Rows3 size={13} />} label="Rows used" value={`${st.rowsUsed} / ${st.rows}`} sub={fullest && fullest.kg > 0 ? `fullest R${fullest.index} at ${Math.round(fullest.fillPct)} %` : 'empty'} />
-      <Kpi icon={<Boxes size={13} />} label="Units on this truck" value={`${st.units}`} unit={`of ${st.candidates}`} sub={loaded ? `${loaded} loaded so far` : `${st.candidates - st.units} stay in the yard`} />
+      <Kpi icon={<Boxes size={13} />} label="Units on this truck" value={`${st.units}`} unit={`of ${st.candidates}`} sub={`${st.candidates - st.units} stay in the yard`} />
     </div>
   );
 }

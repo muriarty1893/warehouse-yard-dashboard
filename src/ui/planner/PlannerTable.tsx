@@ -1,8 +1,7 @@
 import { Ban, Flame, Search, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { planOf, useLoading } from '../../loading/store';
+import { planOf, planSource, useLoading, usePlanCargo } from '../../loading/store';
 import { useUi } from '../../state/ui';
-import { useInventory } from '../../world/inventory';
 import { Card, Pill, Segmented, type Tone } from '../kit';
 import { fmtKg, stopColor } from './format';
 import { filterRows, planRows, type PlanRow, type RowFilter, type RowStatus } from './notes';
@@ -19,7 +18,7 @@ const STATUS: Record<RowStatus, { tone: Tone; label: (r: PlanRow) => string }> =
 export function PlannerTable({ truckId }: { truckId: string }) {
   const t = useLoading((s) => s.trucks[truckId]);
   const plan = useLoading((s) => planOf(s, truckId));
-  const cargo = useInventory((s) => s.cargo);
+  const cargo = usePlanCargo();
   const selected = useUi((s) => (s.selected?.kind === 'cargo' ? s.selected.id : null));
   const [filter, setFilter] = useState<RowFilter>('all');
   const [query, setQuery] = useState('');
@@ -82,6 +81,7 @@ export function PlannerTable({ truckId }: { truckId: string }) {
               <span className="truncate text-ink">
                 {r.description}
                 {r.fragile && <span className="ml-1.5 text-[10.5px] font-semibold text-[#c4640a]">FRAGILE</span>}
+                {planSource().papersMissing(r.id) && <span className="ml-1.5 text-[10.5px] font-semibold text-[#d02a25]">PAPERS MISSING</span>}
               </span>
               <span className="truncate font-mono text-[11.5px] text-muted">{r.id}</span>
               <span className="truncate text-muted">{r.location}</span>

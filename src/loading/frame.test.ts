@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bayById } from '../config/devYard';
 import { bayRear, parkInBay } from '../domain/vehicles';
 import { bayFitWarning, bayOfTruck, boxToLocal, boxToYard, rigidLayout, truckPoseFor, yardToBox } from './frame';
+import { setPlanSource } from './store';
 import { vehicleById } from './vehicles';
 
 const L1 = bayById('L1');
@@ -41,10 +42,10 @@ describe('box frame', () => {
     expect(bayFitWarning(L1, vehicleById('rigid-26'))).toBeNull();
   });
 
-  it("finds a parked truck's bay", () => {
-    expect(bayOfTruck('TRUCK-102')?.id).toBe('L1');
-    expect(bayOfTruck('TRUCK-110')?.id).toBe('P2');
-    expect(bayOfTruck('TRUCK-104')).toBeNull();
+  it("asks the plan source for a truck's bay", () => {
+    setPlanSource({ trucks: () => [], cargo: () => [], bayOf: (id) => (id === 'T-1' ? bayById('L2') : null), papersMissing: () => false, onConfirm: () => ({ ok: true }) });
+    expect(bayOfTruck('T-1')?.id).toBe('L2');
+    expect(bayOfTruck('T-2')).toBeNull();
   });
 
   it("rigid model for rigid-26 keeps today's proportions", () => {

@@ -1,7 +1,6 @@
-import { devYard } from '../config/devYard';
-import { trucks } from '../config/fleet';
+import { planSource } from './store';
 import type { Pose, TruckBay, Vec2 } from '../domain/types';
-import { bayRear, parkInBay } from '../domain/vehicles';
+import { bayRear } from '../domain/vehicles';
 import type { VehicleSpec } from './types';
 
 /**
@@ -44,15 +43,9 @@ export function bayFitWarning(bay: TruckBay, v: VehicleSpec): string | null {
   return `${v.overallLength.toFixed(1)} m — longer than bay ${bay.id} (${bay.length} m), blocks the lane`;
 }
 
-/** The bay a parked truck stands in (scripted visitors have none). */
+/** The bay a truck stands in, from the plan source (the running shift). */
 export function bayOfTruck(truckId: string): TruckBay | null {
-  const spec = trucks.find((t) => t.id === truckId);
-  if (!spec?.pose || spec.route) return null;
-  const { x, y } = spec.pose;
-  return devYard.bays.find((b) => {
-    const p = parkInBay(b, spec.kind);
-    return Math.hypot(p.x - x, p.y - y) < 1.5;
-  }) ?? null;
+  return planSource().bayOf(truckId);
 }
 
 /** Proportions of a rigid truck model (model-local x forward, origin on the first rear axle). */

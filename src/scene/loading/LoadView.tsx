@@ -4,13 +4,12 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { Pose } from '../../domain/types';
 import { bayOfTruck, boxToLocal, boxToYard, truckPoseFor } from '../../loading/frame';
-import { planOf, useLoading } from '../../loading/store';
+import { planOf, useLoading, usePlanCargo } from '../../loading/store';
 import type { AxleId, LoadPlan, VehicleSpec } from '../../loading/types';
 import { vehicleById } from '../../loading/vehicles';
 import { useView } from '../../state/view';
 import { freeArea, rowAnchors } from '../../ui/planner/anchors';
 import { fmtT } from '../../ui/planner/format';
-import { useInventory } from '../../world/inventory';
 import { yardToWorld } from '../kit';
 import { PackedUnits } from './PackedUnits';
 
@@ -92,7 +91,7 @@ function PlannedLoad({ truckId }: { truckId: string }) {
   const plan = useLoading((s) => planOf(s, truckId));
   // The 2D plan covers the view; DOM labels in the scene would float over it.
   const drawing = useView((s) => s.plannerView === 'plan');
-  const cargo = useInventory((s) => s.cargo);
+  const cargo = usePlanCargo();
   const vehicle = plan?.vehicle;
   const bay = useMemo(() => bayOfTruck(truckId), [truckId]);
   const v = vehicle ? vehicleById(vehicle) : null;

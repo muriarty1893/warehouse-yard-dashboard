@@ -11,7 +11,6 @@ import { PlannerTable } from './PlannerTable';
 import { PlannerTopBar } from './PlannerTopBar';
 import { RowCards } from './RowCards';
 import { RouteRail, StatusNote } from './RouteRail';
-import { VehicleRail } from './VehicleRail';
 
 /**
  * The load planner's screen over the 3D yard (spec §2.1); replaces the yard
@@ -28,7 +27,6 @@ export function PlannerDashboard({ truckId }: { truckId: string }) {
       <PlannerTopBar truckId={truckId} />
       <div data-planner-rail className="pointer-events-none absolute top-[76px] bottom-4 left-4 z-10 flex w-[264px] flex-col">
         <Card className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
-          <VehicleRail truckId={truckId} />
           <RouteRail truckId={truckId} />
           <div className="mt-auto">
             <StatusNote truckId={truckId} />
