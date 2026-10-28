@@ -111,6 +111,7 @@ describe('ledger', () => {
     expect(fmtMoney(640)).toBe('+€640');
     expect(fmtMoney(-180)).toBe('−€180');
     expect(fmtMoney(4280, { sign: false })).toBe('€4,280');
+    expect(fmtMoney(0)).toBe('€0');
   });
 
   test('no fees run once the shift is over (they were posted)', () => {

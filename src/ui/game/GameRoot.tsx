@@ -4,13 +4,17 @@ import { useSim } from '../../sim/clock';
 import { useView } from '../../state/view';
 import { Dialogs } from '../Dialog';
 import { PlannerDashboard } from '../planner/PlannerDashboard';
+import { Briefing } from './Briefing';
 import { CameraStrip } from './CameraStrip';
+import { Campaign } from './Campaign';
 import { CrewQueue } from './CrewQueue';
 import { Hint } from './Hint';
 import { keyAction } from './keys';
 import { MoneyToasts } from './MoneyToasts';
 import { Notices } from './Notices';
 import { PapersPanel } from './PapersPanel';
+import { PauseMenu } from './PauseMenu';
+import { Report } from './Report';
 import { Scoreboard } from './Scoreboard';
 import { SelectionCard } from './SelectionCard';
 import { SpendBar } from './SpendBar';
@@ -76,7 +80,11 @@ export function GameRoot() {
   return (
     <div className="pointer-events-none absolute inset-0 font-sans text-navy">
       {screen === 'shift' && (planner ? <PlannerDashboard truckId={planner.truckId} /> : <Hud />)}
+      {screen === 'campaign' && <Campaign />}
+      {screen === 'briefing' && <Briefing />}
+      {screen === 'report' && <Report />}
       <Dialogs />
+      <PauseMenu />
     </div>
   );
 }

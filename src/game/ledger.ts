@@ -76,5 +76,5 @@ export const cash = (s: ShiftState, t: number) => s.recipe.budget + profit(s, t)
 export function fmtMoney(n: number, opts: { sign?: boolean } = {}): string {
   const v = Math.round(n);
   if (v < 0) return `−${eur(v)}`;
-  return opts.sign === false ? eur(v) : `+${eur(v)}`;
+  return opts.sign === false || v === 0 ? eur(v) : `+${eur(v)}`;
 }
