@@ -26,7 +26,7 @@ export function hint(s: ShiftState, key: HintKey): GameEvent[] {
   return [{ kind: 'hint', key }];
 }
 
-const notice = (t: number, text: string, tone: 'info' | 'warn' = 'warn'): GameEvent => ({ kind: 'notice', t, text, tone });
+const notice = (t: number, text: string, tone: 'info' | 'warn' = 'warn', until?: number): GameEvent => ({ kind: 'notice', t, text, tone, ...(until !== undefined ? { until } : {}) });
 
 /** Until when a bay is closed at t (engine seconds), or null. */
 export function bayClosedUntil(s: ShiftState, bayId: string, t: number): number | null {
@@ -82,7 +82,7 @@ export function incidentDue(s: ShiftState): Due[] {
         return [notice(t, `${f.id} broke down · back at ${clockLabel(back)}`), ...hint(s, 'tempForklift')];
       });
     } else if (inc.kind === 'rain') {
-      once(`inc-${i}-warn`, secondsFor(inc.atMin - 45), 31, () => [notice(secondsFor(inc.atMin - 45), `Rain at ${clockLabel(secondsFor(inc.atMin))} · ${atRisk(s).length} units in the open need cover`), ...hint(s, 'rain')]);
+      once(`inc-${i}-warn`, secondsFor(inc.atMin - 45), 31, () => [notice(secondsFor(inc.atMin - 45), `Rain at ${clockLabel(secondsFor(inc.atMin))} · ${atRisk(s).length} units in the open need cover`, 'warn', secondsFor(inc.atMin + 10)), ...hint(s, 'rain')]);
       once(`inc-${i}-damage`, secondsFor(inc.atMin + 10), 32, () => {
         const t = secondsFor(inc.atMin + 10);
         const wet = atRisk(s);

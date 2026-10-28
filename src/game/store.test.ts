@@ -94,4 +94,36 @@ describe('game store', () => {
     useGame.getState().tick();
     expect(Object.keys(useLoading.getState().trucks)).toEqual([]);
   });
+
+  test('hints that arrive together wait their turn', () => {
+    const g = useGame.getState();
+    g.openBriefing('bad-weather');
+    g.startShift();
+    expect(useGame.getState().hint).toBe('basics');
+    useGame.getState().dismissHint();
+    expect(useGame.getState().hint).toBe('queue');
+    useGame.getState().dismissHint();
+    expect(useGame.getState().hint).toBe('papers');
+    useGame.getState().dismissHint();
+    expect(useGame.getState().hint).toBeNull();
+    expect(useProgress.getState().hintsSeen).toEqual(['basics', 'queue', 'papers']);
+  });
+
+  test('the rain warning stays up until the rain does its damage', async () => {
+    const { secondsFor } = await import('./types');
+    const g = useGame.getState();
+    g.openBriefing('bad-weather');
+    g.startShift();
+    clock.t = secondsFor(270 - 45) + 0.1;
+    useGame.getState().tick();
+    const rain = useGame.getState().notices.find((n) => n.text.startsWith('Rain at'))!;
+    expect(rain.until).toBeCloseTo(secondsFor(280), 6);
+    clock.t = secondsFor(279);
+    useGame.getState().tick();
+    expect(useGame.getState().notices.some((n) => n.id === rain.id)).toBe(true);
+    clock.t = secondsFor(281);
+    useGame.getState().tick();
+    expect(useGame.getState().notices.some((n) => n.id === rain.id)).toBe(false);
+  });
 });
+

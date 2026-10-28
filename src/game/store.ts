@@ -27,8 +27,10 @@ interface GameStore {
   /** Bumped on every change, so views re-read the (mutable) shift. */
   version: number;
   toasts: { id: number; entry: LedgerEntry }[];
-  notices: { id: number; text: string; tone: 'info' | 'warn' }[];
+  notices: { id: number; text: string; tone: 'info' | 'warn'; until?: number }[];
   hint: HintKey | null;
+  /** Hints that arrived while another was showing. */
+  hintQueue: HintKey[];
   report: Report | null;
   paused: boolean;
   openCampaign: () => void;
@@ -71,13 +73,21 @@ export const useGame = create<GameStore>((set, get) => {
   /** Fold engine events into the HUD state. */
   function take(events: GameEvent[]) {
     const s = get();
-    let { toasts, notices, hint, report, screen } = s;
+    let { toasts, notices, hint, hintQueue, report, screen } = s;
     for (const e of events) {
       if (e.kind === 'money' && e.entry.amount !== 0 && !QUIET.has(e.entry.kind)) toasts = [{ id: ++serial, entry: e.entry }, ...toasts].slice(0, MAX_TOASTS);
-      else if (e.kind === 'notice') notices = [{ id: ++serial, text: e.text, tone: e.tone }, ...notices].slice(0, 3);
-      else if (e.kind === 'hint' && !hint && !useProgress.getState().hintsSeen.includes(e.key)) {
-        hint = e.key;
-        useProgress.getState().seeHint(e.key);
+      else if (e.kind === 'notice') {
+        const fresh = { id: ++serial, text: e.text, tone: e.tone, ...(e.until !== undefined ? { until: e.until } : {}) };
+        // Notices that last (the rain warning) are never pushed out by passing ones.
+        const sticky = notices.filter((n) => n.until !== undefined);
+        notices = [fresh, ...notices.filter((n) => n.until === undefined)].slice(0, 3);
+        notices = [...notices, ...sticky.filter((x) => !notices.includes(x))];
+      } else if (e.kind === 'hint' && !useProgress.getState().hintsSeen.includes(e.key) && hint !== e.key && !hintQueue.includes(e.key)) {
+        if (hint) hintQueue = [...hintQueue, e.key];
+        else {
+          hint = e.key;
+          useProgress.getState().seeHint(e.key);
+        }
       } else if (e.kind === 'over' && s.shift) {
         report = buildReport(s.shift);
         useProgress.getState().record(s.shift.recipe.id, report.profit, report.stars);
@@ -85,7 +95,9 @@ export const useGame = create<GameStore>((set, get) => {
         clock.speed = 0;
       }
     }
-    set({ toasts, notices, hint, report, screen, version: s.version + 1 });
+    // Lasting notices go once their time is up.
+    notices = notices.filter((n) => n.until === undefined || clock.t < n.until);
+    set({ toasts, notices, hint, hintQueue, report, screen, version: s.version + 1 });
     syncPlanner(get().shift);
   }
 
@@ -97,11 +109,12 @@ export const useGame = create<GameStore>((set, get) => {
     toasts: [],
     notices: [],
     hint: null,
+    hintQueue: [],
     report: null,
     paused: false,
     openCampaign: () => {
       clock.speed = 0;
-      set({ screen: 'campaign', shift: null, report: null, toasts: [], notices: [], hint: null, paused: false });
+      set({ screen: 'campaign', shift: null, report: null, toasts: [], notices: [], hint: null, hintQueue: [], paused: false });
     },
     openBriefing: (recipeId) => set({ screen: 'briefing', recipeId, report: null }),
     startShift: () => {
@@ -111,7 +124,7 @@ export const useGame = create<GameStore>((set, get) => {
       clock.t = 0;
       useSim.getState().setSpeed(1);
       useUi.getState().select(null);
-      set({ screen: 'shift', shift, toasts: [], notices: [], hint: null, report: null, paused: false, version: get().version + 1 });
+      set({ screen: 'shift', shift, toasts: [], notices: [], hint: null, hintQueue: [], report: null, paused: false, version: get().version + 1 });
       useView.getState().closePlanner();
       planKey = planInputs(shift);
       useLoading.getState().resetAll();
@@ -137,7 +150,12 @@ export const useGame = create<GameStore>((set, get) => {
       useSim.setState({ paused: p });
       set({ paused: p });
     },
-    dismissHint: () => set({ hint: null }),
+    dismissHint: () => {
+      const queue = get().hintQueue.filter((k) => !useProgress.getState().hintsSeen.includes(k));
+      const next = queue.shift() ?? null;
+      if (next) useProgress.getState().seeHint(next);
+      set({ hint: next, hintQueue: queue });
+    },
     dismissToast: (id) => set({ toasts: get().toasts.filter((x) => x.id !== id) }),
     dismissNotice: (id) => set({ notices: get().notices.filter((x) => x.id !== id) }),
   };

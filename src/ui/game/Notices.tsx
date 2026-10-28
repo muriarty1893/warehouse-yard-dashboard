@@ -21,7 +21,8 @@ export function Notices() {
   // Cheap check per tick; the move itself (a spot search) is only worked out on click.
   const atRiskNow = useShiftView((s) => atRisk(s).length) ?? 0;
   useEffect(() => {
-    const timers = notices.map((n) => window.setTimeout(() => dismiss(n.id), LIFE_MS));
+    // Lasting notices (the rain warning) are taken down by the store at their time.
+    const timers = notices.filter((n) => n.until === undefined).map((n) => window.setTimeout(() => dismiss(n.id), LIFE_MS));
     return () => timers.forEach(clearTimeout);
   }, [notices, dismiss]);
   useEffect(() => {

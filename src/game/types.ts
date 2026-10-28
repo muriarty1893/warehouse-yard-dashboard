@@ -192,7 +192,8 @@ export interface LedgerEntry {
 export type GameEvent =
   | { kind: 'money'; entry: LedgerEntry }
   | { kind: 'hint'; key: HintKey }
-  | { kind: 'notice'; t: number; text: string; tone: 'info' | 'warn' }
+  /** `until`: engine time the notice stays up to (else the HUD lets it go after a few seconds). */
+  | { kind: 'notice'; t: number; text: string; tone: 'info' | 'warn'; until?: number }
   | { kind: 'over' };
 
 export interface ShiftState {
