@@ -244,6 +244,7 @@ export function validate(s: ShiftState, a: Action, t: number): ActionResult {
 }
 
 function afford(s: ShiftState, price: number, t: number): ActionResult {
+  if (s.freeCash) return ok;
   return cash(s, t) >= price ? ok : no(`Not enough cash (€${price.toLocaleString('en-US')} needed)`);
 }
 

@@ -18,6 +18,19 @@ export const SHIFT_MIN_PER_SEC = 0.6;
 export const shiftMinutes = (t: number) => t * SHIFT_MIN_PER_SEC;
 export const secondsFor = (minutes: number) => minutes / SHIFT_MIN_PER_SEC;
 
+/** The crew's lunch, 12:00–13:00 (minutes after 06:00): no forklift job or paperwork starts. */
+export const LUNCH = { fromMin: 360, toMin: 420 };
+export const atLunch = (t: number) => t >= secondsFor(LUNCH.fromMin) && t < secondsFor(LUNCH.toMin);
+
+/** When work of `seconds` started at t is done, with lunch taken out of the middle. */
+export function workDone(t: number, seconds: number): number {
+  const from = secondsFor(LUNCH.fromMin);
+  const to = secondsFor(LUNCH.toMin);
+  const start = atLunch(t) ? to : t;
+  const end = start + seconds;
+  return start < from && end > from ? end + (to - from) : end;
+}
+
 /** "HH:MM" on the shift clock at engine time t. */
 export function clockLabel(t: number): string {
   const total = Math.floor(SHIFT_START_MIN + shiftMinutes(t) + 1e-9);
@@ -216,6 +229,8 @@ export interface ShiftState {
   fired: string[];
   over: boolean;
   log: { t: number; action: Action }[];
+  /** Admin mode: spending is never refused for lack of cash. */
+  freeCash?: boolean;
 }
 
 export type Action =

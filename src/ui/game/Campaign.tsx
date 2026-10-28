@@ -1,4 +1,5 @@
 import { Lock, Play } from 'lucide-react';
+import { useAdmin } from '../../game/admin';
 import { useProgress } from '../../game/progress';
 import { RECIPES } from '../../game/recipes';
 import { useGame } from '../../game/store';
@@ -8,7 +9,9 @@ import { Num, Slant, Stars } from './kit';
 /** The nine shifts, like a season's fixtures (spec §4.3). */
 export function Campaign() {
   const shifts = useProgress((s) => s.shifts);
-  const isUnlocked = useProgress((s) => s.isUnlocked);
+  const progressUnlocked = useProgress((s) => s.isUnlocked);
+  const unlockAll = useAdmin((s) => s.unlockAll);
+  const isUnlocked = (no: number) => unlockAll || progressUnlocked(no);
   const total = useProgress((s) => s.totalStars());
   const open = useGame((s) => s.openBriefing);
   const unlocked = RECIPES.filter((r) => isUnlocked(r.no));

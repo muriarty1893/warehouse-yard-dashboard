@@ -12,7 +12,11 @@ The shift is scored in money, and every fine names the rule behind it.
 ## How a shift plays
 
 - **The clock.** A shift runs 06:00–14:00 on the scoreboard, about 13 real minutes at 1×. Speed it
-  up with 2× / 4× (keys `1` `2` `3`). `Esc` pauses, and covers the yard while paused.
+  up with 2× / 4× / 8× (keys `1` `2` `3` `4`). `Esc` pauses, and covers the yard while paused.
+- **Five bays.** L1–L4 back onto the covered platform; L5 stands along the gate wall next to the open
+  yard, its rear on a yard ramp so forklifts can load it from the ground.
+- **Lunch** is 12:00–13:00: jobs under way are finished, but no new forklift job or paperwork starts
+  until 13:00. Trucks keep arriving.
 - **Inbound trucks** queue at the kerb outside the gate. The first 5 minutes are free; after that
   waiting costs €12 a minute. Click a truck, send it to a free bay, pick a storage area, and the
   crew unloads it (€40 per unit stored).
@@ -24,6 +28,13 @@ The shift is scored in money, and every fine names the rule behind it.
   temp forklift), rain (move cartons and bags under cover), closed bays, rush orders, overtime.
 - **The report** at full time shows profit and stars, the money in and out, every fine with its time
   and rule, and one lesson for the retry.
+
+## Creative mode
+
+The **Creative** tab on the left edge (or the `` ` `` key) opens an admin panel for seeing the game
+without playing it: skip time (+15 min, +1 h, to 13:00, end the shift), fast-forward at 16× / 32× / 64×,
+**Autopilot** (the good test bot makes every decision, also while skipping), **No cash limit**,
+**Hide hints**, **All shifts open**, start any shift straight away, and reset the campaign progress.
 
 ## The campaign
 

@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
+import { useAdmin } from '../../game/admin';
 import { useGame } from '../../game/store';
 import { useSim } from '../../sim/clock';
 import { useView } from '../../state/view';
 import { Dialogs } from '../Dialog';
+import { AdminPanel } from './AdminPanel';
 import { PlannerDashboard } from '../planner/PlannerDashboard';
 import { Briefing } from './Briefing';
 import { CameraStrip } from './CameraStrip';
@@ -21,13 +23,17 @@ import { SpendBar } from './SpendBar';
 import { Timeline } from './Timeline';
 import { WorldTags } from './WorldTags';
 
-/** Game keys: 1 / 2 / 3 speed; Esc closes the planner, else pauses (spec §4.4). */
+/** Game keys: 1 / 2 / 3 / 4 speed; Esc closes the planner, else pauses (spec §4.4); ` opens the admin panel. */
 function useGameKeys() {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const a = keyAction(e);
       const g = useGame.getState();
+      if (a === 'admin') {
+        useAdmin.getState().set({ open: !useAdmin.getState().open });
+        return;
+      }
       if (!a || g.screen !== 'shift') return;
       if (a === 'pause') {
         const view = useView.getState();
@@ -36,7 +42,7 @@ function useGameKeys() {
         return;
       }
       if (g.paused) return;
-      useSim.getState().setSpeed(a === 'speed1' ? 1 : a === 'speed2' ? 2 : 4);
+      useSim.getState().setSpeed(a === 'speed1' ? 1 : a === 'speed2' ? 2 : a === 'speed4' ? 4 : 8);
     };
     window.addEventListener('keydown', down);
     return () => window.removeEventListener('keydown', down);
@@ -83,6 +89,7 @@ export function GameRoot() {
       {screen === 'campaign' && <Campaign />}
       {screen === 'briefing' && <Briefing />}
       {screen === 'report' && <Report />}
+      {!planner && <AdminPanel />}
       <Dialogs />
       <PauseMenu />
     </div>

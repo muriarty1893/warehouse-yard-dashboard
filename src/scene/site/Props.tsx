@@ -202,7 +202,7 @@ function FixtureModel({ f }: { f: Fixture }) {
 }
 
 export function Props({ yard }: { yard: YardConfig }) {
-  const chockFor = ['L1', 'L4', 'P2'].map((bay) => parked(bay, 'rigid'));
+  const chockFor = ['L1', 'L4', 'P1'].map((bay) => parked(bay, 'rigid'));
   return (
     <group>
       <Merge>

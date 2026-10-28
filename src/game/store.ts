@@ -54,6 +54,13 @@ const QUIET = new Set(['handling']);
 const onStart: (() => void)[] = [];
 export const onShiftStart = (fn: () => void) => onStart.push(fn);
 
+/** Hooks run after every engine tick (the admin autopilot). */
+const afterTick: (() => void)[] = [];
+export const onTick = (fn: () => void) => afterTick.push(fn);
+
+/** Admin-mode switches the store reads (kept in sync by the admin module). */
+export const adminFlags = { noHints: false, freeCash: false };
+
 /** What the planner depends on: the plannable trucks and the free cargo. A change re-plans the drafts. */
 let planKey = '';
 function planInputs(s: ShiftState) {
@@ -82,7 +89,7 @@ export const useGame = create<GameStore>((set, get) => {
         const sticky = notices.filter((n) => n.until !== undefined);
         notices = [fresh, ...notices.filter((n) => n.until === undefined)].slice(0, 3);
         notices = [...notices, ...sticky.filter((x) => !notices.includes(x))];
-      } else if (e.kind === 'hint' && !useProgress.getState().hintsSeen.includes(e.key) && hint !== e.key && !hintQueue.includes(e.key)) {
+      } else if (e.kind === 'hint' && !adminFlags.noHints && !useProgress.getState().hintsSeen.includes(e.key) && hint !== e.key && !hintQueue.includes(e.key)) {
         if (hint) hintQueue = [...hintQueue, e.key];
         else {
           hint = e.key;
@@ -136,6 +143,7 @@ export const useGame = create<GameStore>((set, get) => {
       const shift = get().shift;
       if (!shift || get().screen !== 'shift') return { ok: false, reason: 'No shift running' };
       const events: GameEvent[] = [];
+      shift.freeCash = adminFlags.freeCash;
       const r = act(shift, a, clock.t, events);
       take(events);
       return r;
@@ -144,6 +152,7 @@ export const useGame = create<GameStore>((set, get) => {
       const { shift, screen } = get();
       if (!shift || screen !== 'shift') return;
       take(advance(shift, clock.t));
+      for (const fn of afterTick) fn();
     },
     setPaused: (p) => {
       clock.speed = p ? 0 : useSim.getState().speed;

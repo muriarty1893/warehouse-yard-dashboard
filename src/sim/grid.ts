@@ -1,5 +1,4 @@
 import { devYard } from '../config/devYard';
-import { trucks } from '../config/fleet';
 import type { Obb } from '../domain/geometry';
 import type { Cargo, Vec2 } from '../domain/types';
 import { FORKLIFT, RIGID } from '../domain/vehicles';
@@ -9,7 +8,7 @@ import { inYard, stackBase } from '../world/placement';
 
 /**
  * Where a forklift can drive (spec §3.1): a 0.25 m occupancy grid of the yard
- * with walls, buildings, fixtures, parked trucks and cargo blocked, and no
+ * with walls, buildings, fixtures and cargo blocked, and no
  * step up or down of more than 0.3 m between neighbouring cells (the platform
  * edge; the ramp is gentle enough). A* finds a path, pulled tight by line of
  * sight.
@@ -105,11 +104,13 @@ export function buildGrid(cargo: Cargo[], opts: { ignore?: Set<string>; inflate?
     fill(g, { x: r.x + r.w / 2, y: r.y + r.h / 2, yaw: 0, hl: r.w / 2, hw: r.h / 2 }, grow);
   }
   for (const fx of devYard.fixtures) fill(g, fixtureBox(fx), grow);
-  const mid = (RIGID.front - RIGID.rear) / 2;
-  for (const t of trucks) {
-    if (t.route || !t.pose) continue;
-    const { x, y, heading } = t.pose;
-    fill(g, { x: x + Math.cos(heading) * mid, y: y + Math.sin(heading) * mid, yaw: heading, hl: (RIGID.front + RIGID.rear) / 2, hw: RIGID.width / 2 }, grow);
+  // The twin's parked trucks (config/fleet) are not in the game: trucks come
+  // and go with the shift, and forklifts drive into them at the docks. A bay
+  // on the open floor (L5, by the wall) is kept free, so forklifts go round a
+  // truck standing there instead of through it.
+  for (const bay of devYard.bays) {
+    if (bay.kind !== 'loading' || Math.abs(Math.sin(bay.heading)) > 0.5) continue;
+    fill(g, { x: bay.center[0], y: bay.center[1], yaw: bay.heading, hl: bay.length / 2, hw: RIGID.width / 2 }, grow);
   }
   for (const c of cargo) {
     if (c.on || !inYard(c) || ignore.has(c.id)) continue;

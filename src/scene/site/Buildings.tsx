@@ -663,23 +663,30 @@ export function CanopyLights({ b }: { b: Building }) {
 /** Forklift ramp: a sloped concrete wedge from the ground to the platform. */
 export function RampMesh({ ramp }: { ramp: Ramp }) {
   const r = ramp.rect;
+  // Built climbing north (length along the climb, width across), then turned to its direction.
+  const ns = ramp.up === 'north' || ramp.up === 'south';
+  const len = ns ? r.h : r.w;
+  const wid = ns ? r.w : r.h;
+  const turn = { north: 0, west: Math.PI / 2, south: Math.PI, east: -Math.PI / 2 }[ramp.up];
   const geo = useMemo(() => {
-    // Profile in the climb direction (north): length r.h, rise ramp.rise; extruded across r.w.
-    const shape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(r.h, 0), new THREE.Vector2(r.h, ramp.rise)]);
-    const g = new THREE.ExtrudeGeometry(shape, { depth: r.w, bevelEnabled: false });
+    // Profile in the climb direction: length len, rise ramp.rise; extruded across wid.
+    const shape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(len, 0), new THREE.Vector2(len, ramp.rise)]);
+    const g = new THREE.ExtrudeGeometry(shape, { depth: wid, bevelEnabled: false });
     // shape x → yard north (world −z), shape y → up, extrude → east (world +x).
     g.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1));
     return g;
-  }, [r.h, r.w, ramp.rise]);
+  }, [len, wid, ramp.rise]);
   return (
-    <group position={yardToWorld(r.x, r.y)}>
-      <mesh geometry={geo} material={mat('#cdd4e0', { roughness: 0.9 })} castShadow receiveShadow />
-      {[0.15, r.w - 0.15].map((dx) => (
-        <mesh key={dx} position={[dx, ramp.rise / 2 + 0.06, -r.h / 2]} rotation={[Math.atan2(ramp.rise, r.h), 0, 0]} castShadow>
-          <boxGeometry args={[0.18, 0.12, Math.hypot(r.h, ramp.rise)]} />
-          <meshStandardMaterial color={palette.yellow} roughness={0.5} />
-        </mesh>
-      ))}
+    <group position={yardToWorld(r.x + r.w / 2, r.y + r.h / 2)} rotation={[0, turn, 0]}>
+      <group position={[-wid / 2, 0, len / 2]}>
+        <mesh geometry={geo} material={mat('#cdd4e0', { roughness: 0.9 })} castShadow receiveShadow />
+        {[0.15, wid - 0.15].map((dx) => (
+          <mesh key={dx} position={[dx, ramp.rise / 2 + 0.06, -len / 2]} rotation={[Math.atan2(ramp.rise, len), 0, 0]} castShadow>
+            <boxGeometry args={[0.18, 0.12, Math.hypot(len, ramp.rise)]} />
+            <meshStandardMaterial color={palette.yellow} roughness={0.5} />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
 }

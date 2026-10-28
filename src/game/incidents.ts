@@ -5,7 +5,7 @@ import { compileRoute } from '../sim/route';
 import { standing } from './crew';
 import { post } from './ledger';
 import { TEMP_IN, tempOutRoute } from './places';
-import { clockLabel, secondsFor, type Due, type GameCargo, type GameEvent, type HintKey, type Mechanic, type ShiftState } from './types';
+import { clockLabel, LUNCH, secondsFor, workDone, type Due, type GameCargo, type GameEvent, type HintKey, type Mechanic, type ShiftState } from './types';
 
 /**
  * Timed events besides trucks and jobs (spec §1.5, §1.6, §2): the papers
@@ -67,6 +67,8 @@ export function incidentDue(s: ShiftState): Due[] {
 
   once('start', 0, 0, () => [...hint(s, 'basics'), ...hint(s, 'queue'), ...(s.papers.queue.length ? hint(s, 'papers') : [])]);
   if (has(s, 'overtime')) once('overtime-hint', secondsFor(420), 35, () => hint(s, 'overtime'));
+  once('lunch', secondsFor(LUNCH.fromMin), 36, () => [notice(secondsFor(LUNCH.fromMin), `Lunch break · the crew and the clerk stop until ${clockLabel(secondsFor(LUNCH.toMin))}`, 'info', secondsFor(LUNCH.toMin))]);
+  once('lunch-over', secondsFor(LUNCH.toMin), 36, () => [notice(secondsFor(LUNCH.toMin), 'Lunch is over · the crew is back to work', 'info')]);
 
   s.recipe.incidents.forEach((inc, i) => {
     if (inc.kind === 'breakdown') {
@@ -98,7 +100,7 @@ export function incidentDue(s: ShiftState): Due[] {
 
   // The clerk works down the papers queue.
   if (s.papers.queue.length && s.papers.startedAt !== null) {
-    const t = s.papers.startedAt + secondsFor(s.recipe.clerkMin ?? 20);
+    const t = workDone(s.papers.startedAt, secondsFor(s.recipe.clerkMin ?? 20));
     out.push({
       t,
       order: 20,

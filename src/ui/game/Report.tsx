@@ -1,4 +1,5 @@
 import { Lightbulb, Play, RotateCcw } from 'lucide-react';
+import { useAdmin } from '../../game/admin';
 import { useProgress } from '../../game/progress';
 import { RECIPES } from '../../game/recipes';
 import { useGame } from '../../game/store';
@@ -11,7 +12,9 @@ export function Report() {
   const report = useGame((s) => s.report);
   const g = useGame.getState();
   const best = useProgress((s) => (report ? s.shifts[report.recipeId]?.bestProfit : undefined));
-  const isUnlocked = useProgress((s) => s.isUnlocked);
+  const progressUnlocked = useProgress((s) => s.isUnlocked);
+  const unlockAll = useAdmin((s) => s.unlockAll);
+  const isUnlocked = (no: number) => unlockAll || progressUnlocked(no);
   if (!report) return null;
   const r = RECIPES.find((x) => x.id === report.recipeId)!;
   const next = RECIPES.find((x) => x.no === r.no + 1);

@@ -9,7 +9,7 @@ import { recommendSpot } from '../world/placement';
 import { loadRoute, moveRoute, unloadRoute, type JobRoute, type YardSpot } from './legs';
 import { FORKLIFT_HOMES, TEMP_IN } from './places';
 import { post } from './ledger';
-import type { Due, GameCargo, GameEvent, GameForklift, Job, JobGroup, JobKind, ShiftState } from './types';
+import { atLunch, type Due, type GameCargo, type GameEvent, type GameForklift, type Job, type JobGroup, type JobKind, type ShiftState } from './types';
 
 /**
  * The forklift crew (spec §1.4): jobs grouped per order, groups in the
@@ -154,6 +154,22 @@ const cellIn = (g: Grid, open: Uint8Array, p: [number, number]) => {
   return i >= 0 && j >= 0 && i < g.nx && j < g.ny && !!open[j * g.nx + i];
 };
 
+/** An open cell within 2 m of p: where a path to p can start or end (as findPath snaps to it). */
+function nearIn(g: Grid, open: Uint8Array, p: [number, number]): boolean {
+  const i0 = Math.floor((p[0] - g.x0) / g.cell);
+  const j0 = Math.floor((p[1] - g.y0) / g.cell);
+  const r = Math.round(2 / g.cell);
+  for (let j = Math.max(0, j0 - r); j <= Math.min(g.ny - 1, j0 + r); j++) for (let i = Math.max(0, i0 - r); i <= Math.min(g.nx - 1, i0 + r); i++) if (open[j * g.nx + i]) return true;
+  return false;
+}
+
+/** Where a forklift waits to drive into a truck at the bay: behind its dock face (legs.ts dockGeometry). */
+function dockQueue(bayId: string): [number, number] {
+  const bay = bayById(bayId);
+  const [rx, ry] = bayRear(bay);
+  return [rx - Math.cos(bay.heading) * 2.95, ry - Math.sin(bay.heading) * 2.95];
+}
+
 /** Yard units an outbound truck still in play will want: their access must stay open. */
 function wanted(s: ShiftState, cargo: Cargo[]): Cargo[] {
   const stops = new Set(s.trucks.filter((t) => t.kind === 'outbound' && t.stage !== 'departing' && t.stage !== 'gone').flatMap((t) => t.stops));
@@ -178,9 +194,10 @@ function spotFor(s: ShiftState, unit: GameCargo, areaId: string | null): YardSpo
 
 function findSpot(s: ShiftState, unit: GameCargo, areaId: string | null): YardSpot | null {
   return withYard(s, unit.id, (cargo, grid) => {
-    const dock = bayRear(bayById(s.recipe.bays[0]));
-    const from: [number, number] = [dock[0], dock[1] + 2.5];
+    const from = dockQueue(s.recipe.bays[0]);
     const before = openFloor(grid, from);
+    // Every open bay's dock a forklift can get to now, which a stored unit must not cut off.
+    const docks = s.recipe.bays.map(dockQueue).filter((p) => nearIn(grid, before, p));
     // Units an outbound truck still wants, that a forklift can get to from the bays today.
     const keep = wanted(s, cargo)
       .filter((c) => !c.on)
@@ -197,6 +214,7 @@ function findSpot(s: ShiftState, unit: GameCargo, areaId: string | null): YardSp
       restoreUnit(grid, ghost);
       try {
         const after = openFloor(grid, from);
+        if (!docks.every((p) => nearIn(grid, after, p))) return false;
         return keep.every((k) => {
           const a = Math.hypot(k.c.x - sp.x, k.c.y - sp.y) < 4.5 ? reachUnit(grid, cargo, k.c) : k.a;
           return !!a && cellIn(grid, after, a.stand);
@@ -313,7 +331,8 @@ function tryJob(s: ShiftState, job: Job, free: GameForklift[], t: number): boole
 
 /** Give free forklifts the next startable job of the highest group, nearest forklift first. */
 export function dispatch(s: ShiftState, t: number) {
-  if (s.over) return;
+  // At lunch jobs under way are finished, nothing new is started.
+  if (s.over || atLunch(t)) return;
   for (let assigned = true; assigned; ) {
     assigned = false;
     const free = s.forklifts.filter((f) => forkliftFree(f, t));

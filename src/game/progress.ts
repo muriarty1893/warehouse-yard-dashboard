@@ -31,7 +31,7 @@ export function migrateProgress(saved: unknown, version: number): Progress {
 }
 
 /** localStorage that never throws (private mode, full storage). */
-const safeStorage: StateStorage = {
+export const safeStorage: StateStorage = {
   getItem: (key) => {
     try {
       return localStorage.getItem(key);

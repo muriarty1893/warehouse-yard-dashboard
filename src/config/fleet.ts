@@ -73,7 +73,7 @@ export const PICKS = { platform: [33.0, 33.2] as Vec2, ground: [17.0, 20.6] as V
 export const trucks: TruckSpec[] = [
   { id: 'TRUCK-102', driver: 'Murat Demir', capacity: 12, activity: 'loading', kind: 'rigid', carrier: 'docktor', plate: '34 DKT 102', status: 'Loading at L1', pose: parked('L1', 'rigid'), doorsOpen: true, plannable: true, body: 'rigid-26' },
   { id: 'TRUCK-109', driver: 'Serkan Uçar', capacity: 12, activity: 'loading', kind: 'rigid', carrier: 'nordline', plate: '16 NRD 109', status: 'Loading at L4', pose: parked('L4', 'rigid'), doorsOpen: true, plannable: true, body: 'rigid-26' },
-  { id: 'TRUCK-110', driver: 'Barış Tan', capacity: 12, activity: 'waiting', kind: 'rigid', carrier: 'bluepeak', plate: '06 BLP 110', status: 'Waiting for a bay · P2', pose: parked('P2', 'rigid'), plannable: true, body: 'rigid-26' },
+  { id: 'TRUCK-110', driver: 'Barış Tan', capacity: 12, activity: 'waiting', kind: 'rigid', carrier: 'bluepeak', plate: '06 BLP 110', status: 'Waiting for a bay · P1', pose: parked('P1', 'rigid'), plannable: true, body: 'rigid-26' },
   {
     id: 'TRUCK-104',
     driver: 'Cem Aksoy',

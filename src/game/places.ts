@@ -73,6 +73,7 @@ export function queueRoute(from: Pose, to: Pose, t0: number): RouteSpec {
  * lane are passed on the west, the others on the east.
  */
 export function dockRoute(from: Pose, bay: TruckBay, t0: number): RouteSpec {
+  if (wallBay(bay)) return wallDockRoute(from, bay, t0);
   const bx = bay.center[0];
   const parked = parkedPose(bay);
   const west = IN_X - (bx - REVERSE_R) >= 3;
@@ -87,8 +88,40 @@ export function dockRoute(from: Pose, bay: TruckBay, t0: number): RouteSpec {
   return route(legs, t0);
 }
 
+/** A bay along the south wall (L5): parked nose to the gate, not against the platform. */
+const wallBay = (bay: TruckBay) => Math.abs(Math.sin(bay.heading)) < 0.5;
+
+/** Through check-in, up the in-lane, then back down it and west along the wall into the bay. */
+function wallDockRoute(from: Pose, bay: TruckBay, t0: number): RouteSpec {
+  const parked = parkedPose(bay);
+  const top: Vec2 = [IN_X, TURN_Y];
+  const legs: Leg[] = [
+    { kind: 'drive', phase: 'gate', path: tidy([[from.x, from.y], [IN_X, KERB_Y], CHECK_IN]), radius: 4, status: `To the gate · ${bay.id}` },
+    { kind: 'wait', phase: 'gate', seconds: 3, status: 'Gate check-in' },
+    { kind: 'drive', phase: 'docking', path: [CHECK_IN, top], status: `To ${bay.id}` },
+    { kind: 'wait', phase: 'docking', seconds: 1.2, status: `Reversing to ${bay.id}` },
+    { kind: 'drive', phase: 'docking', path: [top, [IN_X, parked.y], [parked.x, parked.y]], radius: REVERSE_R, reverse: true, speed: 1.5, status: `Reversing to ${bay.id}` },
+  ];
+  return route(legs, t0);
+}
+
+/** Forward out of a wall bay towards the gate, check-out, then right out of the gate onto the westbound lane. */
+function wallDepartRoute(bay: TruckBay, t0: number): { spec: RouteSpec; clearAt: number } {
+  const parked = parkedPose(bay);
+  const y = parked.y;
+  const outX = IN_X - 6;
+  const legs: Leg[] = [
+    { kind: 'drive', phase: 'departing', path: [[parked.x, y], [outX - 4.5, y]], status: 'Departing' },
+    { kind: 'wait', phase: 'gate', seconds: 2.5, status: 'Gate check-out' },
+    { kind: 'drive', phase: 'departed', path: [[outX - 4.5, y], [outX, y], [outX, road.westbound], [road.spawnWest, road.westbound]], radius: 3.5, speed: 11, status: 'Departed' },
+  ];
+  const spec = route(legs, t0);
+  return { spec, clearAt: t0 + compileRoute(spec).legs[0].duration };
+}
+
 /** Out of the bay (the bay is free at `clearAt`), through check-out, west along the road. */
 export function departRoute(bay: TruckBay, t0: number): { spec: RouteSpec; clearAt: number } {
+  if (wallBay(bay)) return wallDepartRoute(bay, t0);
   const parked = parkedPose(bay);
   const bx = parked.x;
   const out: Leg = { kind: 'drive', phase: 'departing', path: [[bx, parked.y], [bx, CLEAR_Y]], status: 'Departing' };

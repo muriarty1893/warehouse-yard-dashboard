@@ -112,10 +112,15 @@ const bays: TruckBay[] = [
     width: 4.4,
     heading: -Math.PI / 2,
   })),
+  // Along the south wall by the gate: backed in nose to the gate, rear against
+  // a yard ramp at the open yard's corner (ground-level loading).
+  { id: 'L5', kind: 'loading', center: [24.1, 3.0], length: 11, width: 3.4, heading: 0 },
   // Parking along the south wall, west of the entrance (waiting trucks).
   { id: 'P1', kind: 'parking', center: [8.5, 3.0], length: 11.7, width: 3.1, heading: 0 },
-  { id: 'P2', kind: 'parking', center: [23.8, 3.0], length: 11.0, width: 3.1, heading: 0 },
 ];
+
+/** Rear of bay L5: a yard ramp from the ground up to a truck's deck. */
+export const L5_RAMP = { x: 15.0, y: 1.75, w: 3.6, h: 2.5 };
 
 export const devYard: YardConfig = {
   id: 'YD-01',
@@ -140,7 +145,8 @@ export const devYard: YardConfig = {
     { id: 'EP-1', kind: 'pallets', label: 'Empty pallets', x: 6.2, y: 25.9, heading: 0, count: 9 },
     { id: 'EP-2', kind: 'pallets', label: 'Empty pallets', x: 7.6, y: 25.9, heading: 0.05, count: 6 },
     { id: 'EP-3', kind: 'pallets', label: 'Empty pallets', x: 9.0, y: 25.95, heading: -0.04, count: 11 },
-    { id: 'EP-4', kind: 'pallets', label: 'Empty pallets', x: 50.6, y: 29.4, heading: Math.PI / 2, count: 7 },
+    // East of bay L4's dock, so the forklifts there aren't walled in.
+    { id: 'EP-4', kind: 'pallets', label: 'Empty pallets', x: 56.0, y: 27.6, heading: Math.PI / 2, count: 7 },
     { id: 'SKIP-1', kind: 'skip', label: 'Waste skip', x: 12.6, y: 25.85, heading: 0 },
     { id: 'BINS-1', kind: 'bins', label: 'Bins', x: 61.4, y: 11.7, heading: 0, count: 3 },
     { id: 'FX-1', kind: 'extinguisher', label: 'Fire extinguisher', x: 33.15, y: 27.25, heading: 0 },
@@ -148,7 +154,7 @@ export const devYard: YardConfig = {
     { id: 'FX-3', kind: 'extinguisher', label: 'Fire extinguisher', x: 55.95, y: 14.75, heading: 0 },
     { id: 'FX-4', kind: 'extinguisher', label: 'Fire extinguisher', x: 18.0, y: 1.25, heading: 0 },
     { id: 'CONES-1', kind: 'cones', label: 'Traffic cones', x: 29.7, y: 19.8, heading: Math.PI / 2, count: 2 },
-    { id: 'PJ-1', kind: 'palletJack', label: 'Pallet jack', x: 50.7, y: 27.75, heading: Math.PI },
+    { id: 'PJ-1', kind: 'palletJack', label: 'Pallet jack', x: 54.4, y: 27.5, heading: Math.PI },
     ...[
       [1.0, 26.3, 0],
       [29.8, 1.0, Math.PI / 2],
@@ -197,7 +203,10 @@ export const devYard: YardConfig = {
       ],
     },
   ],
-  ramps: [{ id: 'RAMP-1', rect: { x: 21.6, y: 21, w: 7.1, h: 5.9 }, rise: PLATFORM, up: 'north' }],
+  ramps: [
+    { id: 'RAMP-1', rect: { x: 21.6, y: 21, w: 7.1, h: 5.9 }, rise: PLATFORM, up: 'north' },
+    { id: 'RAMP-2', rect: L5_RAMP, rise: 1.1, up: 'east' },
+  ],
   areas: [
     { id: 'FK-RAMP', kind: 'forklift', rect: { x: 19.6, y: 18.7, w: 9.6, h: 2.3 }, label: 'FORKLIFTS' },
     { id: 'R-CHARGE', kind: 'restricted', rect: { x: 52.1, y: 28.3, w: 4.6, h: 3.65 }, label: 'CHARGING', elevation: PLATFORM },
