@@ -113,4 +113,24 @@ describe('crew dispatcher', () => {
     expect(s.jobs.every((j) => j.status === 'done')).toBe(true);
     for (const id of truck(s, 'TRUCK-IN-1').load.map((p) => p.cargoId)) expect(s.cargo.find((c) => c.id === id)!.loadedOn).toBeNull();
   });
+
+  test('a move group skips a unit no forklift can reach and moves the rest', () => {
+    const s = dockedOutboundFixture();
+    const yard = yardOf(s);
+    const grid = buildGrid(yard);
+    const free = yard.filter((c) => !c.on && c.areaId !== 'HS1' && !yard.some((o) => o.on === c.id) && reachUnit(grid, yard, c));
+    const [boxed, other] = free;
+    let n = 0;
+    for (const axis of [0, Math.PI / 2])
+      for (const side of [1, -1]) {
+        const half = (axis === 0 ? boxed.dims.l : boxed.dims.w) / 2;
+        const d = side * (half + 1.45);
+        s.cargo.push(blocker(boxed as never, `BLOCK-${n++}`, boxed.x + Math.cos(boxed.yaw + axis) * d, boxed.y + Math.sin(boxed.yaw + axis) * d));
+      }
+    const g = addGroup(s, { kind: 'move', label: 'Move 2 units → Main hold', truckId: null, areaId: 'HS1', units: [boxed.id, other.id].map((unitId) => ({ unitId, placement: null })) });
+    dispatch(s, 0);
+    const [j1, j2] = g.jobIds.map((id) => s.jobs.find((j) => j.id === id)!);
+    expect(j1.blocked).toBe('No forklift access');
+    expect(j2.status).toBe('active');
+  });
 });

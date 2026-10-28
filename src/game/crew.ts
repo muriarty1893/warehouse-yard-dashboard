@@ -264,6 +264,49 @@ function assign(s: ShiftState, job: Job, unit: GameCargo, f: GameForklift, r: Jo
 }
 
 /** Give free forklifts the next startable job of the highest group, nearest forklift first. */
+/**
+ * The jobs of a group that may start now: the first queued one (loads and
+ * unloads keep their order), or for moves any queued unit with nothing left
+ * on top of it (a boxed-in unit doesn't hold up the rest).
+ */
+function startable(s: ShiftState, group: JobGroup): Job[] {
+  const queued = group.jobIds.map((id) => jobOf(s, id)!).filter((j) => j.status === 'queued');
+  if (group.kind !== 'move') return queued.slice(0, 1);
+  const waiting = new Set(queued.map((j) => j.unitId));
+  return queued.filter((j) => !s.cargo.some((c) => c.on === j.unitId && !c.gone && waiting.has(c.id)));
+}
+
+/** Try one job: spot, nearest forklift that can route it, assign. Returns whether it started. */
+function tryJob(s: ShiftState, job: Job, free: GameForklift[], t: number): boolean {
+  const tr = job.truckId ? s.trucks.find((x) => x.id === job.truckId) : undefined;
+  if (tr && (tr.stage !== 'docked' || tr.dispatchPending)) return false;
+  const unit = unitOf(s, job.unitId);
+  if (!unit || unit.gone) return false;
+  const key = tryKey(s, free);
+  if (job.blocked && lastTry.get(job) === key) return false;
+  lastTry.set(job, key);
+  let spot: YardSpot | null = null;
+  if (job.kind !== 'load') {
+    spot = spotFor(s, unit, job.areaId);
+    if (!spot) {
+      job.blocked = 'Area full';
+      return false;
+    }
+  }
+  const [px, py] = pickupPoint(s, job, unit);
+  const order = [...free].sort((a, b) => Math.hypot(a.pose.x - px, a.pose.y - py) - Math.hypot(b.pose.x - px, b.pose.y - py) || a.id.localeCompare(b.id));
+  for (const f of order) {
+    const route = planRoute(s, job, unit, f, spot, t);
+    if (route) {
+      assign(s, job, unit, f, route, spot, t);
+      return true;
+    }
+  }
+  job.blocked = 'No forklift access';
+  return false;
+}
+
+/** Give free forklifts the next startable job of the highest group, nearest forklift first. */
 export function dispatch(s: ShiftState, t: number) {
   if (s.over) return;
   for (let assigned = true; assigned; ) {
@@ -271,41 +314,10 @@ export function dispatch(s: ShiftState, t: number) {
     const free = s.forklifts.filter((f) => forkliftFree(f, t));
     if (!free.length) return;
     for (const group of s.groups) {
-      const job = group.jobIds.map((id) => jobOf(s, id)!).find((j) => j.status === 'queued');
-      if (!job) continue;
-      const tr = job.truckId ? s.trucks.find((x) => x.id === job.truckId) : undefined;
-      if (tr && (tr.stage !== 'docked' || tr.dispatchPending)) continue;
-      const unit = unitOf(s, job.unitId);
-      if (!unit || unit.gone) continue;
-      const key = tryKey(s, free);
-      if (job.blocked && lastTry.get(job) === key) continue;
-      lastTry.set(job, key);
-      let spot: YardSpot | null = null;
-      if (job.kind !== 'load') {
-        spot = spotFor(s, unit, job.areaId);
-        if (!spot) {
-          job.blocked = 'Area full';
-          continue;
-        }
+      if (startable(s, group).some((job) => tryJob(s, job, free, t))) {
+        assigned = true;
+        break;
       }
-      const [px, py] = pickupPoint(s, job, unit);
-      const order = [...free].sort((a, b) => Math.hypot(a.pose.x - px, a.pose.y - py) - Math.hypot(b.pose.x - px, b.pose.y - py) || a.id.localeCompare(b.id));
-      let route: JobRoute | null = null;
-      let by: GameForklift | null = null;
-      for (const f of order) {
-        route = planRoute(s, job, unit, f, spot, t);
-        if (route) {
-          by = f;
-          break;
-        }
-      }
-      if (!route || !by) {
-        job.blocked = 'No forklift access';
-        continue;
-      }
-      assign(s, job, unit, by, route, spot, t);
-      assigned = true;
-      break;
     }
   }
 }

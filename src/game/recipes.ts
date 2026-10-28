@@ -199,7 +199,7 @@ export const RECIPES: Recipe[] = [
       { kind: 'bayClosed', bayId: 'L2', fromMin: 120, toMin: 300 },
     ],
     budget: 1500,
-    targets: [-1300, -400, 500],
+    targets: [-1300, 300, 1800],
   },
   {
     id: 'rush-order',
@@ -262,7 +262,7 @@ export const RECIPES: Recipe[] = [
       { kind: 'rain', atMin: 300 },
     ],
     budget: 2000,
-    targets: [-2000, -1100, -200],
+    targets: [-2000, -1200, -400],
   },
 ];
 

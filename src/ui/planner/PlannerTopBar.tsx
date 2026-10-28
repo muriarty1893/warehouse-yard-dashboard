@@ -8,6 +8,7 @@ import { vehicleById } from '../../loading/vehicles';
 import { useUi } from '../../state/ui';
 import { useView, type PlannerView } from '../../state/view';
 import { frameTruck } from './camera';
+import { Scoreboard } from '../game/Scoreboard';
 import { Button, IconButton, Logo, Segmented } from '../kit';
 
 const VIEWS: { value: PlannerView; label: string }[] = [
@@ -87,6 +88,7 @@ export function PlannerTopBar({ truckId }: { truckId: string }) {
         </span>
       </div>
       <div className="flex-1" />
+      <Scoreboard compact />
       <div className="pointer-events-auto w-[240px]">
         <Segmented value={view} options={VIEWS} onChange={(v) => (v === view ? frameTruck(truckId, v) : setView(v))} />
       </div>

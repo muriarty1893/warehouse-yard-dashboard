@@ -29,13 +29,17 @@ function PlanTicker() {
 }
 
 export default function App() {
-  // Temporary until the campaign screens exist (plan Task 17): start shift 1 straight away.
+  // Temporary until the campaign screens exist (plan Task 17): start a shift straight away.
+  // Dev only: ?shift=<id>&bot=good|basic&t=<seconds> plays the shift with a test bot up to t (screenshots, checks).
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
     const g = useGame.getState();
-    if (!g.shift) {
-      g.openBriefing('opening-gate');
-      useGame.getState().startShift();
-    }
+    if (g.shift) return;
+    g.openBriefing(q.get('shift') ?? 'opening-gate');
+    useGame.getState().startShift();
+    const bot = q.get('bot');
+    const until = Number(q.get('t') ?? 0);
+    if (import.meta.env.DEV && bot && until > 0) void import('./game/devPlay').then((m) => m.devPlay(bot, until));
   }, []);
   const select = useUi((s) => s.select);
   const drawing = useView((s) => !!s.planner && s.plannerView === 'plan');
