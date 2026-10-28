@@ -11,6 +11,7 @@ import { CargoLayer } from './cargo/CargoLayer';
 import { Overlays } from './cargo/Overlays';
 import { Lighting } from './Lighting';
 import { GameForklifts, GameTrucks } from './game/GameVehicles';
+import { Projector } from './game/Projector';
 import { LoadView } from './loading/LoadView';
 import { GateArea } from './site/Gate';
 import { CameraRig, MAX_DISTANCE, MIN_DISTANCE, YARD_CENTER } from './CameraRig';
@@ -32,6 +33,7 @@ export function YardScene() {
   return (
     <>
       <SimClock />
+      <Projector />
       <color attach="background" args={[palette.background]} />
       <fog attach="fog" args={[palette.background, 300, 700]} />
 

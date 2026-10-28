@@ -1,4 +1,5 @@
 import { clock } from '../sim/clock';
+import { useUi } from '../state/ui';
 import { basicBot, goodBot } from './bots';
 import { useGame } from './store';
 
@@ -15,4 +16,6 @@ export function devPlay(bot: string, until: number) {
   }
   clock.t = until;
   useGame.getState().tick();
+  const select = new URLSearchParams(window.location.search).get('select');
+  if (select) useUi.getState().select({ kind: select.startsWith('TRUCK') ? 'truck' : 'cargo', id: select });
 }

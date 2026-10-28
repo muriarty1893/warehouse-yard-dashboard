@@ -6,13 +6,16 @@ import { Dialogs } from '../Dialog';
 import { PlannerDashboard } from '../planner/PlannerDashboard';
 import { CameraStrip } from './CameraStrip';
 import { CrewQueue } from './CrewQueue';
+import { Hint } from './Hint';
 import { keyAction } from './keys';
 import { MoneyToasts } from './MoneyToasts';
 import { Notices } from './Notices';
 import { PapersPanel } from './PapersPanel';
 import { Scoreboard } from './Scoreboard';
+import { SelectionCard } from './SelectionCard';
 import { SpendBar } from './SpendBar';
 import { Timeline } from './Timeline';
+import { WorldTags } from './WorldTags';
 
 /** Game keys: 1 / 2 / 3 speed; Esc closes the planner, else pauses (spec §4.4). */
 function useGameKeys() {
@@ -40,6 +43,8 @@ function useGameKeys() {
 function Hud() {
   return (
     <>
+      <WorldTags />
+      <SelectionCard />
       <div className="absolute inset-x-[2%] top-[2.5%] z-20">
         <Scoreboard />
       </div>
@@ -58,6 +63,7 @@ function Hud() {
       <div className="pointer-events-auto absolute top-1/2 left-[2%] z-10 -translate-y-1/2">
         <CameraStrip />
       </div>
+      <Hint />
     </>
   );
 }
