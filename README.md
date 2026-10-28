@@ -61,26 +61,7 @@ wall, every stop can come out through the doors, nothing is stacked on fragile u
 checked at departure and after each drop. **Optimise** tries ~1,000 layouts in a Web Worker and keeps the
 best; **Urgent unit** forces a unit on. Units that don't fit wait in the yard with their reason.
 
-## How it's made
 
-- **React + TypeScript + Vite**, 3D with **three.js** via **React Three Fiber** and drei, UI with
-  **Tailwind CSS**, state in **Zustand**.
-- **The shift engine** (`src/game`) is plain TypeScript: a recipe and a fixed seed generate the shift;
-  `act` applies a decision and `advance` fires everything due, in strict time order. The same recipe and
-  actions always give the same shift, to the cent. Every truck and forklift move is a one-shot route
-  planned at decision time (A* over the yard grid) and played back from the sim clock.
-- **Bots and balancing.** Two test bots play every shift headless: a slow-to-react *basic* one and a
-  *good* one. Star targets come from what they make (★ = basic, ★★★ = 95 % of good).
-- The yard is generated from one config file in meters (`src/config/devYard.ts`), traced from a
-  hand-drawn plan. Buildings, vehicles and cargo are procedural low-poly geometry; trees and roads are
-  CC0 models by Kenney.
+## Licence
 
-```bash
-npm install
-npm run dev       # the game
-npm test          # engine, planner and UI logic tests
-npm run balance   # bot profits and star targets per shift
-```
-
-In development, `?shift=<id>&bot=good&t=<seconds>` starts a shift and lets the good bot play it up to a
-time (handy for screenshots); `?brief=<id>` opens a briefing.
+MIT Licence
