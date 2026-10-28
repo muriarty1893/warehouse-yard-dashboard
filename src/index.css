@@ -1,12 +1,21 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-ink: #1b2a4a;
-  --color-muted: #5b6b8c;
-  --color-faint: #8a94ad;
+  /* Broadcast scoreboard (spec §4.1). Text on every pair is ≥ 4.5:1. */
+  --color-navy: #0b1d4f;
   --color-brand: #2f5ff0;
-  --color-line: #e8ecf3;
-  --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
+  --color-hot: #ff6b1a;
+  --color-go: #0f7a3d;
+  --color-stop: #d02a25;
+  --color-paper: #ffffff;
+  --color-pale: #a9b8dd;
+  --color-move: #7a4cf0;
+  --color-ink: #0b1d4f;
+  --color-muted: #4a5a80;
+  --color-faint: #66759a;
+  --color-line: #e3e8f2;
+  --font-sans: 'Barlow', system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Barlow', system-ui, sans-serif;
 }
 
 html,
@@ -16,7 +25,7 @@ body,
   margin: 0;
   overflow: hidden;
   background: #e4e8f2;
-  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  font-family: 'Barlow', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -64,4 +73,23 @@ body,
 .tag-violet {
   background: #7a5af0;
   color: #fff;
+}
+
+/* Slanted broadcast panels: skew the box, un-skew what is inside. */
+.slant {
+  transform: skewX(-12deg);
+}
+.slant > .unslant {
+  transform: skewX(12deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .slide-in {
+    animation: slide-in 200ms ease-out;
+  }
+}
+@keyframes slide-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
 }

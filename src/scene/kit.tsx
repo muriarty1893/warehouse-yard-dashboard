@@ -258,7 +258,7 @@ export function canvasTexture(
   return tex;
 }
 
-export const FONT = '"Inter Variable", Inter, system-ui, sans-serif';
+export const FONT = '"Barlow", system-ui, sans-serif';
 
 /** Memoized material with a texture map. */
 export function useMapMaterial(tex: THREE.Texture, opts: MatOpts & { color?: string } = {}) {
