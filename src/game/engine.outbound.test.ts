@@ -84,4 +84,10 @@ describe('outbound trucks', () => {
     advanceUntil(s, (x) => truck(x, 'TRUCK-OUT-1').stage === 'departing');
     expect(s.ledger.filter((e) => e.kind === 'delivery')).toHaveLength(1);
   });
+
+  test('sending an outbound truck away without its cargo costs every unit it came for', () => {
+    const s = docked(withRecipe({ trucks: [TEST_RECIPE.trucks[0], { ...TEST_RECIPE.trucks[1], deadlineMin: 400 }] }));
+    expect(act(s, { kind: 'dispatch', truckId: 'TRUCK-OUT-1' }, s.t)).toEqual({ ok: true });
+    expect(s.ledger.filter((e) => e.kind === 'missedTruck').map((e) => e.amount)).toEqual([-240, -240, -240, -240]);
+  });
 });

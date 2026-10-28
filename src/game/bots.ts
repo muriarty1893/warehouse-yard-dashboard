@@ -56,6 +56,17 @@ export const basicBot: Policy = (s, t) => {
 
 const deadlineOf = (tr: GameTruck | undefined) => tr?.deadline ?? Infinity;
 
+/** A shortcut-taker (a review check, not used for targets): first-come bays, suggested areas, outbound trucks sent off the moment they dock. */
+export const lazyBot: Policy = (s, t) => {
+  const waiting = s.trucks.filter((tr) => tr.stage === 'waiting').sort((a, b) => a.times.arrived! - b.times.arrived!);
+  const out = assignBays(s, t, waiting);
+  for (const tr of docked(s)) {
+    if (tr.kind === 'inbound' && !tr.areaId && has(s, 'storage')) out.push({ kind: 'chooseArea', truckId: tr.id, areaId: suggestArea(s, tr.id) });
+    if (tr.kind === 'outbound' && has(s, 'outbound') && !tr.dispatchPending) out.push({ kind: 'dispatch', truckId: tr.id });
+  }
+  return out;
+};
+
 export const goodBot: Policy = (s, t) => {
   const out: Action[] = [];
   const truckOf = (id: string | null) => s.trucks.find((x) => x.id === id);

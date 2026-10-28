@@ -169,3 +169,20 @@ describe('hints and mechanics', () => {
       expect(act(s, a, 0).ok).toBe(false);
   });
 });
+
+describe('one unit, one job', () => {
+  test('a unit planned onto a truck or already queued cannot be moved', () => {
+    const s = newShift(TEST_RECIPE);
+    dock(s, 'TRUCK-OUT-1', 'L1');
+    const plan = recommendPlan(s, 'TRUCK-OUT-1');
+    act(s, { kind: 'confirmPlan', truckId: 'TRUCK-OUT-1', plan }, 0);
+    const planned = plan.placements.at(-1)!.cargoId;
+    const r = act(s, { kind: 'moveUnits', unitIds: [planned], areaId: 'HS2' }, 0);
+    expect(r).toEqual({ ok: false, reason: `${planned} is already in the crew queue` });
+    const free = putUnit(s, 'TEST-FREE', 'drum', 'OY');
+    expect(act(s, { kind: 'moveUnits', unitIds: [free.id], areaId: 'HS2' }, 0).ok).toBe(true);
+    expect(act(s, { kind: 'moveUnits', unitIds: [free.id], areaId: 'HS1' }, 0)).toEqual({ ok: false, reason: 'TEST-FREE is already in the crew queue' });
+    expect(planningCargo(s).map((c) => c.id)).not.toContain('TEST-FREE');
+  });
+});
+

@@ -1,7 +1,7 @@
 import { devYard } from '../config/devYard';
 import { areaSize } from '../domain/yard';
 import { recommendSpot } from '../world/placement';
-import { standing } from './crew';
+import { inQueue, standing } from './crew';
 import { isLoaded, validate } from './engine';
 import { atRisk, bayClosedUntil } from './incidents';
 import { runningFees } from './ledger';
@@ -168,12 +168,13 @@ export function briefingRows(recipe: Recipe) {
 
 /** The rain warning's one-click order: every unit at risk (with what stands on it) to the covered area with the most room. */
 export function rainMoveAction(s: ShiftState): Action | null {
-  const risk = atRisk(s);
+  // Units already in a job (a planned load, an earlier move) stay where the crew expects them.
+  const risk = atRisk(s).filter((c) => !inQueue(s, c.id) && !s.cargo.some((t) => t.on === c.id && inQueue(s, t.id)));
   if (!risk.length) return null;
   const ids = new Set(risk.map((c) => c.id));
   for (let grew = true; grew; ) {
     grew = false;
-    for (const c of s.cargo) if (c.on && ids.has(c.on) && !ids.has(c.id) && !c.gone) ids.add(c.id), (grew = true);
+    for (const c of s.cargo) if (c.on && ids.has(c.on) && !ids.has(c.id) && !c.gone && !c.loadedOn) ids.add(c.id), (grew = true);
   }
   const yard = standing(s);
   const areas = areaInfo(s)

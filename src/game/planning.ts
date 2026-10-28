@@ -1,6 +1,7 @@
 import type { Cargo } from '../domain/types';
 import { planAll } from '../loading/candidates';
 import type { LoadPlan, TruckPlanInput, VehicleId } from '../loading/types';
+import { inQueue } from './crew';
 import type { ShiftState } from './types';
 
 /**
@@ -18,7 +19,7 @@ function held(s: ShiftState): Set<string> {
 /** Yard units free to plan: not aboard, not gone, not on the move, not held by a confirmed plan. */
 export function planningCargo(s: ShiftState): Cargo[] {
   const taken = held(s);
-  return s.cargo.filter((c) => !c.loadedOn && !c.gone && !c.transitJob && !taken.has(c.id));
+  return s.cargo.filter((c) => !c.loadedOn && !c.gone && !c.transitJob && !taken.has(c.id) && !inQueue(s, c.id));
 }
 
 /** Outbound trucks at a bay without a confirmed plan, in docking order. */

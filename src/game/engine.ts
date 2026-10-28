@@ -3,7 +3,7 @@ import type { Pose } from '../domain/types';
 import { areaAt } from '../domain/yard';
 import { compileRoute, evalRoute, newPose, type RouteSpec } from '../sim/route';
 import { recommendSpot } from '../world/placement';
-import { addGroup, crewDue, dispatch, moveGroup, standing } from './crew';
+import { addGroup, crewDue, dispatch, inQueue, moveGroup, standing } from './crew';
 import { bayClosedUntil, has, hint, incidentDue } from './incidents';
 import { cash, gateWaitAmount, lateAmount, post } from './ledger';
 import { planningCargo, recommendPlan } from './planning';
@@ -139,10 +139,13 @@ function depart(s: ShiftState, tr: GameTruck, t: number): GameEvent[] {
     const c = s.cargo.find((u) => u.id === id);
     if (c?.papers === 'missing') events.push(post(s, { t, kind: 'missingPapers', amount: -s.prices.missingPapers, text: `${id} left without papers`, ref: id }));
   }
-  for (const p of tr.plan?.placements ?? []) {
-    const c = s.cargo.find((u) => u.id === p.cargoId);
-    if (tr.aboard.includes(p.cargoId) || !c || c.gone) continue;
-    events.push(post(s, { t, kind: 'missedTruck', amount: -s.prices.missedTruck, text: `${p.cargoId} left behind by ${tr.id}`, ref: p.cargoId }));
+  // What it came for: the planned units, or with no plan every yard unit bound for its stops that no other truck has planned.
+  const heldElsewhere = new Set(s.trucks.filter((o) => o !== tr && o.plan && o.stage !== 'departing' && o.stage !== 'gone').flatMap((o) => o.plan!.placements.map((p) => p.cargoId)));
+  const cameFor = tr.plan ? tr.plan.placements.map((p) => p.cargoId) : s.cargo.filter((c) => !c.loadedOn && !c.gone && tr.stops.includes(c.destination) && !heldElsewhere.has(c.id)).map((c) => c.id);
+  for (const id of cameFor) {
+    const c = s.cargo.find((u) => u.id === id);
+    if (tr.aboard.includes(id) || !c || c.gone) continue;
+    events.push(post(s, { t, kind: 'missedTruck', amount: -s.prices.missedTruck, text: `${id} left behind by ${tr.id}`, ref: id }));
   }
   for (const id of tr.aboard) {
     const c = s.cargo.find((u) => u.id === id);
@@ -231,6 +234,7 @@ export function validate(s: ShiftState, a: Action, t: number): ActionResult {
         const c = s.cargo.find((u) => u.id === id);
         if (!c || c.gone || c.loadedOn) return no(`${id} is not in the yard`);
         if (c.transitJob) return no(`${id} is already on the move`);
+        if (inQueue(s, id)) return no(`${id} is already in the crew queue`);
         const top = s.cargo.find((u) => u.on === id && !u.gone && !listed.has(u.id));
         if (top) return no(`${id} has ${top.id} on top`);
       }

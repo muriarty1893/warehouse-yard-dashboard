@@ -58,6 +58,9 @@ export function moveGroup(s: ShiftState, groupId: string, to: number) {
   s.groups.splice(Math.max(0, Math.min(to, s.groups.length)), 0, g);
 }
 
+/** A unit already has a job waiting or under way (one unit, one job). */
+export const inQueue = (s: ShiftState, unitId: string) => s.jobs.some((j) => j.unitId === unitId && (j.status === 'queued' || j.status === 'active'));
+
 export const forkliftFree = (f: GameForklift, t: number) =>
   !f.jobId && (f.brokenUntil === null || f.brokenUntil <= t) && (f.arrivesAt === null || f.arrivesAt <= t) && (f.leaveAt === null || t < f.leaveAt);
 
@@ -282,6 +285,8 @@ function tryJob(s: ShiftState, job: Job, free: GameForklift[], t: number): boole
   if (tr && (tr.stage !== 'docked' || tr.dispatchPending)) return false;
   const unit = unitOf(s, job.unitId);
   if (!unit || unit.gone) return false;
+  // Another job has it on its forks or reserved.
+  if (unit.transitJob && unit.transitJob !== job.id) return false;
   const key = tryKey(s, free);
   if (job.blocked && lastTry.get(job) === key) return false;
   lastTry.set(job, key);
