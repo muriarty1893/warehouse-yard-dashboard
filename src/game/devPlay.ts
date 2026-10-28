@@ -1,5 +1,6 @@
 import { clock } from '../sim/clock';
 import { useUi } from '../state/ui';
+import { useView } from '../state/view';
 import { basicBot, goodBot } from './bots';
 import { useGame } from './store';
 
@@ -16,6 +17,10 @@ export function devPlay(bot: string, until: number) {
   }
   clock.t = until;
   useGame.getState().tick();
-  const select = new URLSearchParams(window.location.search).get('select');
+  const q = new URLSearchParams(window.location.search);
+  const select = q.get('select');
   if (select) useUi.getState().select({ kind: select.startsWith('TRUCK') ? 'truck' : 'cargo', id: select });
+  const plan = q.get('plan');
+  // After the camera controls exist (they take a moment after load).
+  if (plan) window.setTimeout(() => useView.getState().openPlanner(plan), 1500);
 }

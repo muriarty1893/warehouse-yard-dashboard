@@ -1,59 +1,75 @@
-# Docktor · 3D Yard
+# Docktor · Yard Manager
 
-A digital twin of a logistics yard for **Docktor**: a game-like 3D view of the yard with an
-operations dashboard on top. Trucks, forklifts and workers move through the yard, cargo sits
-in free-form storage areas, and each unit can carry its source documents (bill, CMR, delivery note,
-invoice), entered by hand. A load planner packs the trucks at the loading bays from the cargo in the yard.
+A training game for yard managers, set in a 3D logistics yard. You run a shift: trucks arrive
+at the gate, you decide which bay each one gets, where incoming cargo is stored, how outbound trucks
+are loaded and when they leave, and a forklift crew carries out your decisions against the clock.
+The shift is scored in money, and every fine names the rule behind it.
 
 **Live demo: https://warehouse-yard-dashboard.vercel.app/**
 
-![Docktor yard twin: walled yard with free-form storage, loading bays and the operations dashboard](docs/screenshot.png)
+![A shift in progress: scoreboard, truck timeline, crew queue and a selected truck](docs/screenshot.png)
+
+## How a shift plays
+
+- **The clock.** A shift runs 06:00–14:00 on the scoreboard, about 13 real minutes at 1×. Speed it
+  up with 2× / 4× (keys `1` `2` `3`). `Esc` pauses, and covers the yard while paused.
+- **Inbound trucks** queue at the kerb outside the gate. The first 5 minutes are free; after that
+  waiting costs €12 a minute. Click a truck, send it to a free bay, pick a storage area, and the
+  crew unloads it (€40 per unit stored).
+- **Outbound trucks** come to collect. Give one a bay, press **Plan load**: the load planner packs it
+  from the yard, checking axle loads, stacking, fragile units and drop order. Confirm, and the crew
+  loads it. Dispatch it before its deadline (€80 per unit delivered, €15 a minute if late).
+- **The crew** works a job queue from the top. Move jobs up or down, or mark a truck urgent.
+- **Trouble:** missing papers (a clerk fixes them, or rush one for €40), forklift breakdowns (rent a
+  temp forklift), rain (move cartons and bags under cover), closed bays, rush orders, overtime.
+- **The report** at full time shows profit and stars, the money in and out, every fine with its time
+  and rule, and one lesson for the retry.
+
+## The campaign
+
+| # | Shift | Teaches |
+|---|---|---|
+| 1 | Opening the gate | Bays and the gate waiting fee |
+| 2 | Where it goes | Choosing the storage area |
+| 3 | First load | Load planner, dispatch, deadlines |
+| 4 | Paper chase | Missing papers, the clerk, rush fees |
+| 5 | The queue | Reordering jobs, urgent trucks |
+| 6 | Breakdown | Renting a temp forklift |
+| 7 | Bad weather | Rain, cover, a closed bay |
+| 8 | Rush order | A surprise truck, overtime |
+| 9 | Peak day | Everything at once |
+
+One star unlocks the next shift. Progress is kept in the browser.
 
 ## Load planner
 
-Select a truck at a loading bay and press **Plan load**. The planner proposes how the truck is
-packed from the yard units bound for its stops, and the manager decides.
-
 ![Load planner: a cut-away truck with its planned load, axle loads, load distribution and the cargo table](docs/load-planner.png)
 
-**Planning**
-- **Packing:** the last stop goes to the front wall and every stop can come out through the doors.
-  Nothing is stacked on fragile or weak units.
-- **Weight checks:** every axle is checked at departure and after each drop, and a load-distribution chart
-  shows the legal centre-of-gravity window.
-- **Planner controls:**
-  - pick the truck's own body or another vehicle
-  - reorder the route
-  - mark units urgent or exclude them
-  - **Optimise** tries ~1,000 layouts and keeps the best
-- **Left-out units:** units that don't fit go to the next truck on the route or wait in the yard, each with
-  its reason.
-- **Views:** 3D, Side, Top and a 2D Plan drawing with the loading order.
-
-**Loading**
-- **Confirm** stores the plan.
-- **Load at dock** sends two forklifts through the yard (up the ramp too) to bring each unit into the
-  truck, one at a time inside the truck.
-- **Follow** keeps the camera on the forklift, **Skip** finishes the run, and **Dispatch** sends the truck
-  off with its load.
+The planner packs the truck from the yard units bound for its stops: the last stop goes to the front
+wall, every stop can come out through the doors, nothing is stacked on fragile units, and every axle is
+checked at departure and after each drop. **Optimise** tries ~1,000 layouts in a Web Worker and keeps the
+best; **Urgent unit** forces a unit on. Units that don't fit wait in the yard with their reason.
 
 ## How it's made
 
 - **React + TypeScript + Vite**, 3D with **three.js** via **React Three Fiber** and drei, UI with
   **Tailwind CSS**, state in **Zustand**.
-- The whole yard is generated from one config file in meters (`src/config/devYard.ts`), traced from
-  a hand-drawn plan: walls, buildings, raised hold spaces, ramp, loading bays, storage areas.
-  Buildings, vehicles and cargo are procedural low-poly geometry; trees and roads are CC0 models by Kenney.
-- Vehicle movement is simulated: routes are pure functions of time, so pausing and speeding up are free.
-  Cargo placement keeps clear of every route automatically.
-- **Load planner:**
-  - The solver is plain TypeScript in `src/loading` (vehicle presets, axle statics, an extreme-point packer, seeded search in a Web Worker).
-  - The loading run is one-shot forklift routes over an A* grid of the yard (`src/sim`).
-  - The solver's recommended plan, the manager's confirmed plan and what was actually loaded are kept apart.
-- Cargo, documents, history and load plans are saved in the browser (localStorage).
+- **The shift engine** (`src/game`) is plain TypeScript: a recipe and a fixed seed generate the shift;
+  `act` applies a decision and `advance` fires everything due, in strict time order. The same recipe and
+  actions always give the same shift, to the cent. Every truck and forklift move is a one-shot route
+  planned at decision time (A* over the yard grid) and played back from the sim clock.
+- **Bots and balancing.** Two test bots play every shift headless: a slow-to-react *basic* one and a
+  *good* one. Star targets come from what they make (★ = basic, ★★★ = 95 % of good).
+- The yard is generated from one config file in meters (`src/config/devYard.ts`), traced from a
+  hand-drawn plan. Buildings, vehicles and cargo are procedural low-poly geometry; trees and roads are
+  CC0 models by Kenney.
 
 ```bash
 npm install
-npm run dev
-npm test
+npm run dev       # the game
+npm test          # engine, planner and UI logic tests
+npm run balance   # bot profits and star targets per shift
 ```
+
+In development, `?shift=<id>&bot=good&t=<seconds>` starts a shift and lets the good bot play it up to a
+time (handy for screenshots); `?brief=<id>` opens a briefing.
