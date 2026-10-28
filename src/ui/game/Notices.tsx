@@ -1,5 +1,6 @@
 import { CloudRain, Info, TriangleAlert } from 'lucide-react';
 import { useEffect } from 'react';
+import { atRisk } from '../../game/incidents';
 import { rainMoveAction } from '../../game/select';
 import { useGame } from '../../game/store';
 import { useUi } from '../../state/ui';
@@ -17,7 +18,8 @@ export function Notices() {
   const notices = useGame((s) => s.notices);
   const dismiss = useGame((s) => s.dismissNotice);
   const toast = useUi((s) => s.toast);
-  const rain = useShiftView((s) => rainMoveAction(s));
+  // Cheap check per tick; the move itself (a spot search) is only worked out on click.
+  const atRiskNow = useShiftView((s) => atRisk(s).length) ?? 0;
   useEffect(() => {
     const timers = notices.map((n) => window.setTimeout(() => dismiss(n.id), LIFE_MS));
     return () => timers.forEach(clearTimeout);
@@ -39,7 +41,17 @@ export function Notices() {
           {n.text.startsWith('Rain') ? <CloudRain size={14} aria-hidden /> : n.tone === 'warn' ? <TriangleAlert size={14} aria-hidden /> : <Info size={13} aria-hidden />}
           {n.text}
           {n.text.startsWith('Rain at') && (
-            <Btn tone="paper" className="ml-1 !py-0" disabledReason={rain ? null : 'Nothing left out in the open'} onClick={() => rain && act(rain)}>
+            <Btn
+              tone="paper"
+              className="ml-1 !py-0"
+              disabledReason={atRiskNow ? null : 'Nothing left out in the open'}
+              onClick={() => {
+                const shift = useGame.getState().shift;
+                const move = shift && rainMoveAction(shift);
+                if (move) act(move);
+                else useUi.getState().notify('No covered space left for them', 'error');
+              }}
+            >
               Move under cover
             </Btn>
           )}
