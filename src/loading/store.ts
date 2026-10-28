@@ -104,6 +104,29 @@ function replanned(trucks: Record<string, TruckPlanState>, fixed: Record<string,
   return out;
 }
 
+/**
+ * Optimised drafts whose plan still stands: same inputs, and every planned
+ * unit still free with the same goods and spot. They are kept on a re-plan
+ * instead of being replaced by the baseline.
+ */
+function stillOptimal(trucks: Record<string, TruckPlanState>): Record<string, LoadPlan> {
+  const free = new Map(source.cargo().map((c) => [c.id, c]));
+  const keep: Record<string, LoadPlan> = {};
+  for (const t of Object.values(trucks)) {
+    const plan = t.recommended;
+    if (t.status !== 'draft' || !plan || plan.tried <= 1 || plan.inputsHash !== inputsHash(toInput(t))) continue;
+    const same = plan.placements.every((p) => {
+      const c = free.get(p.cargoId);
+      const was = plan.units[p.cargoId];
+      if (!c || !was) return false;
+      const now = fingerprint(c);
+      return now.goods === was.goods && now.spot === was.spot;
+    });
+    if (same) keep[t.truckId] = plan;
+  }
+  return keep;
+}
+
 export const useLoading = create<LoadingState>()((set, get) => {
   /** Change one truck's planning inputs, then re-plan every draft. */
   const change = (truckId: string, patch: (t: TruckPlanState) => Partial<TruckPlanState> | null) => {
@@ -131,7 +154,10 @@ export const useLoading = create<LoadingState>()((set, get) => {
       }),
     clearUrgent: (truckId, cargoId) => change(truckId, (t) => ({ urgent: t.urgent.filter((x) => x !== cargoId), include: t.include.filter((i) => i.cargoId !== cargoId) })),
 
-    replan: () => set({ trucks: replanned(synced(get().trucks)), cargoVersion: get().cargoVersion + 1 }),
+    replan: () => {
+      const trucks = synced(get().trucks);
+      set({ trucks: replanned(trucks, stillOptimal(trucks)), cargoVersion: get().cargoVersion + 1 });
+    },
 
     applyOptimised: (truckId, core, tried, ms) => {
       const t = get().trucks[truckId];

@@ -78,4 +78,21 @@ describe('loading store on a plan source', () => {
     (globalThis as { localStorage?: unknown }).localStorage = ls;
     expect(writes).toEqual([]);
   });
+
+  it('an optimised draft survives a re-plan while its units are unchanged, and not after', () => {
+    const cargo = [...yard];
+    setPlanSource(source(cargo, TRUCKS).src);
+    useLoading.getState().resetAll();
+    const base = planOf(useLoading.getState(), 'T-1')!;
+    const optimised = { ...base, placements: base.placements.slice(0, 1), seed: 99 };
+    useLoading.getState().applyOptimised('T-1', optimised, 1000, 50);
+    useLoading.getState().replan();
+    expect(useLoading.getState().trucks['T-1'].recommended?.tried).toBe(1000);
+    expect(useLoading.getState().trucks['T-1'].recommended?.placements).toHaveLength(1);
+    // One of its units goes (picked for something else): the draft is planned afresh.
+    cargo.splice(cargo.findIndex((c) => c.id === optimised.placements[0].cargoId), 1);
+    useLoading.getState().replan();
+    expect(useLoading.getState().trucks['T-1'].recommended?.tried).not.toBe(1000);
+  });
 });
+
